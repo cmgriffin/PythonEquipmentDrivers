@@ -186,6 +186,30 @@ class Scpi_Instrument():
         return self.instrument.query(query_str)
 
 
+class Gpib_Interface():
+    """
+    Class for instantiation of the GPIB interface device (typically plugs into
+    the computer's USB port). Since GPIB is a bus based interface layer,
+    all instruments that utilize the bus can be accessed with group commands,
+    if supported, to perform syncronized tasks.
+    """
+
+    def __init__(self, address, **kwargs) -> None:
+        self.address = address
+        self.instrument = rm.open_resource(self.address)
+        return None
+
+    def group_execute_trigger(self, *trigger_devices):
+        """
+        Sends the group execture trigger (GET) command to the devices specified
+
+        *trigger_devices: Device instances to trigger
+        """
+        visa_handles = [n.instrument for n in trigger_devices]
+        self.instrument.group_execute_trigger(visa_handles)
+        return None
+
+
 class EnvironmentSetup():
     """
     Class for handling the instantiation of generic sets of test equipment
