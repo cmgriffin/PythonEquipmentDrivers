@@ -8,12 +8,14 @@ class Keithley_2231A(Scpi_Instrument):
     Keithley_2231A(address)
 
     address : str, address of the connected power supply
-
+    channel : int (optional), automatically update the supply channel without 
+        needing to provide the channel argument 
     object for accessing basic functionallity of the Keithley DC supply
     """
 
     def __init__(self, address, **kwargs):
         super().__init__(address, **kwargs)
+        self.channel = kwargs.get('channel')
         self.set_access_remote('remote')
         return None
 
@@ -59,6 +61,19 @@ class Keithley_2231A(Scpi_Instrument):
         self.instrument.write(f'INST:NSEL {channel}')
         return None
 
+    def _update_channel(self, override_channel):
+        """Handles updating the device channel setting"""
+
+        if override_channel is not None:
+            self.set_channel(override_channel)
+        elif self.channel is not None:
+            self.set_channel(self.channel)
+        else:
+            raise ValueError(
+                'Channel number must be provided if it is not provided during \
+                    initialization')
+        return
+
     def get_channel(self):  # check
         """
         get_channel()
@@ -72,27 +87,26 @@ class Keithley_2231A(Scpi_Instrument):
         channel = int(resp)
         return channel
 
-    def set_state(self, state, channel):  # check
+    def set_state(self, state, channel=None):  # check
         """
         set_state(state, channel)
 
-        state: int, 1 or 0 for on and off respectively
+        state: int (optional), 1 or 0 for on and off respectively
 
         channel: int, index of the channel to control.
                  valid options are 1-3
 
         enables/disables the state for the power supply's output
         """
-
-        self.set_channel(channel)
+        self._update_channel(channel)
         self.instrument.write(f"CHAN:OUTP {state}")
         return None
 
-    def get_state(self, channel):  # check
+    def get_state(self, channel=None):  # check
         """
         get_state(channel)
 
-        channel: int, index of the channel to control.
+        channel: int (optional), index of the channel to control.
                  valid options are 1-3
 
         returns the current state of the output relay,
@@ -101,17 +115,17 @@ class Keithley_2231A(Scpi_Instrument):
         1: enabled, 0: disabled
         """
 
-        self.set_channel(channel)
+        self._update_channel(channel)
         resp = self.instrument.query("CHAN:OUTP?").rstrip('\n')
         if resp not in ["ON", '1']:
             return 0
         return 1
 
-    def on(self, channel):
+    def on(self, channel=None):
         """
         on(channel)
 
-        channel: int, index of the channel to control.
+        channel: int (optional), index of the channel to control.
                  valid options are 1-3
 
         enables the relay for the power supply's output
@@ -121,11 +135,11 @@ class Keithley_2231A(Scpi_Instrument):
         self.set_state(1, channel)
         return None
 
-    def off(self, channel):
+    def off(self, channel=None):
         """
         off(channel)
 
-        channel: int, index of the channel to control.
+        channel: int (optional), index of the channel to control.
                  valid options are 1-3
 
         disables the relay for the power supply's output
@@ -135,7 +149,7 @@ class Keithley_2231A(Scpi_Instrument):
         self.set_state(0, channel)
         return None
 
-    def toggle(self, channel, return_state=False):
+    def toggle(self, channel=None, return_state=False):
         """
         toggle(return_state=False)
 
@@ -158,68 +172,68 @@ class Keithley_2231A(Scpi_Instrument):
             return self.get_state(channel)
         return None
 
-    def set_voltage(self, voltage, channel):
+    def set_voltage(self, voltage, channel=None):
         """
         set_voltage(voltage)
 
         voltage: float or int, amplitude to set output to in Vdc
 
-        channel: int, the index of the channel to set. Valid options are 1,2,3.
+        channel: int (optional), the index of the channel to set. Valid options are 1,2,3.
 
         set the output voltage setpoint of channel "channel" specified by
         "voltage"
         """
 
-        self.set_channel(channel)
+        self._update_channel(channel)
         self.instrument.write(f"SOUR:VOLT {voltage}")
         return None
 
-    def get_voltage(self, channel):  # check
+    def get_voltage(self, channel=None):  # check
         """
         get_voltage()
 
-        channel: int, the index of the channel to set. Valid options are 1,2,3.
+        channel: int (optional), the index of the channel to set. Valid options are 1,2,3.
 
         gets the output voltage setpoint in Vdc
 
         returns: float
         """
 
-        self.set_channel(channel)
+        self._update_channel(channel)
         resp = self.instrument.query("SOUR:VOLT?")
         return float(resp)
 
-    def set_current(self, current, channel):  # check
+    def set_current(self, current, channel=None):  # check
         """
         set_current(current)
 
         current: float/int, current limit setpoint in Adc
 
-        channel: int, the index of the channel to set. Valid options are 1,2,3.
+        channel: int (optional), the index of the channel to set. Valid options are 1,2,3.
 
         sets the current limit setting for the power supply in Adc
         """
 
-        self.set_channel(channel)
+        self._update_channel(channel)
         self.instrument.write(f"SOUR:CURR {current}")
         return None
 
-    def get_current(self, channel):  # check
+    def get_current(self, channel=None):  # check
         """
         get_current()
 
-        channel: int, the index of the channel to set. Valid options are 1,2,3.
+        channel: int (optional), the index of the channel to set. Valid options are 1,2,3.
 
         gets the current limit setting for the power supply in Adc
 
         returns: float
         """
 
-        self.set_channel(channel)
+        self._update_channel(channel)
         resp = self.instrument.query("SOUR:CURR?")
         return float(resp)
 
-    def measure_voltage(self, channel):
+    def measure_voltage(self, channel=None):
         """
         measure_voltage()
 
@@ -229,11 +243,11 @@ class Keithley_2231A(Scpi_Instrument):
         returns: float
         """
 
-        self.set_channel(channel)
+        self._update_channel(channel)
         resp = self.instrument.query('MEAS:VOLT?')
         return float(resp)
 
-    def measure_current(self, channel):
+    def measure_current(self, channel=None):
         """
         measure_current()
 
@@ -243,11 +257,11 @@ class Keithley_2231A(Scpi_Instrument):
         returns: float
         """
 
-        self.set_channel(channel)
+        self._update_channel(channel)
         resp = self.instrument.query('MEAS:CURR?')
         return float(resp)
 
-    def pulse(self, level, duration, channel):
+    def pulse(self, level, duration, channel=None):
         """
         pulse(level, duration)
 
@@ -267,13 +281,13 @@ class Keithley_2231A(Scpi_Instrument):
         self.set_voltage(start_level, channel)
         return None
 
-    def ramp(self, start, stop, channel, n=100, dt=0.01):
+    def ramp(self, start, stop, channel=None, n=100, dt=0.01):
         """
         ramp(start, stop, n=100, dt=0.01)
 
         start: float/int, starting voltage setpoint of the ramp in Vdc
         stop: float/int, ending voltage setpoint of the ramp in Vdc
-        channel: int, the index of the channel to set. Valid options are 1,2,3.
+        channel: int (optional), the index of the channel to set. Valid options are 1,2,3.
         n (optional): int, number of points in the ramp between start and stop
             default is 100
         dt (optional): float/int, time between changes in the value of the
@@ -292,13 +306,13 @@ class Keithley_2231A(Scpi_Instrument):
             _sleep(dt)
         return None
 
-    def slew(self, start, stop, channel, n=100, dt=0.01, dwell=0):
+    def slew(self, start, stop, channel=None, n=100, dt=0.01, dwell=0):
         """
         slew(start, stop, n=100, dt=0.01, dwell=0)
 
         start: float/int, "low" voltage setpoint of the ramp in Vdc
         stop: float/int, "high" voltage setpoint of the ramp in Vdc
-        channel: int, the index of the channel to set. Valid options are 1,2,3.
+        channel: int (optional), the index of the channel to set. Valid options are 1,2,3.
         n (optional): int, number of points in the ramp between start and stop
             default is 100
         dt (optional): float/int, time between changes in the value of the
