@@ -1,5 +1,5 @@
 from ._core import (get_devices_addresses, identify_devices, Scpi_Instrument,
-                    VisaIOError, EnvironmentSetup,
+                    VisaIOError, EnvironmentSetup, Gpib_Interface,
                     initiaize_device, get_callable_instance_methods)
 
 
@@ -15,7 +15,7 @@ from . import functiongenerator
 
 from . import utility
 
-__all__ = ['Scpi_Instrument', 'EnvironmentSetup',
+__all__ = ['Scpi_Instrument', 'EnvironmentSetup', 'Gpib_Interface',
            'get_devices_addresses', 'identify_devices',
 
            'initiaize_device', 'get_callable_instance_methods',
