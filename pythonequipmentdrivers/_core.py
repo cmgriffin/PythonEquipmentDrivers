@@ -221,7 +221,7 @@ class Gpib_Interface():
         *trigger_devices: Device instances to trigger
         """
         visa_handles = [n.instrument for n in trigger_devices]
-        self.instrument.group_execute_trigger(visa_handles)
+        self.instrument.group_execute_trigger(*visa_handles)
         return None
 
 

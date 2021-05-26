@@ -79,7 +79,7 @@ class Fluke_8845A(_HP_34401A):
         mode = mode.upper()
         if mode in self.valid_modes:
             self.instrument.write(
-                f"CONFIGURE {self.valid_modes[mode]} {range_}")
+                f"CONF:{self.valid_modes[mode]} {range_}")
         else:
             raise ValueError("Invalid mode option")
         self.instrument.write(f"VOLT:DC:NPLC {nplc}")
