@@ -348,12 +348,21 @@ class EnvironmentSetup():
         Establishs connections to the equipment specified in equipment_json
         """
 
+        # remove devices that are not included in the mask
         if self.object_mask is not None:
             device_list = list(self.configuration.keys())
             for device_name in device_list:
                 if device_name not in self.object_mask:
                     self.configuration.pop(device_name)
 
+        # A container for devices  (as defined by their
+        # definition path). This allows group type commands to be easily
+        # orchestrated
+        # TODO: This could be a general container (dict or named tuple)
+        #       with keys for each type of device
+        dmms = {}
+
+        # iterate through remaining devices and instantiate them
         for device_name in self.configuration:
 
             device_info = self.configuration[device_name]
@@ -368,9 +377,11 @@ class EnvironmentSetup():
 
                 # creates instance named 'device_name' of class
                 # 'device_info['object']'
-                vars(self)[device_name] = class_(device_info['address'],
-                                                 **kwargs)
-
+                inst = class_(device_info['address'],
+                              **kwargs)
+                vars(self)[device_name] = inst
+                if 'multimeter' in device_info['definition']:
+                    dmms[device_name] = inst
                 if verbose:
                     print(f'[CONNECTED] {device_name}')
 
@@ -402,6 +413,9 @@ class EnvironmentSetup():
                     # equipment stop instantations
                     print(error)
                     raise ConnectionError(f"Failed connection: {device_name}")
+        # only create the instance attribute if it is not empty
+        if dmms:
+            self.dmms = dmms
         return None
 
 
