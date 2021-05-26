@@ -57,6 +57,15 @@ class Fluke_45(_Scpi_Instrument):
 
         return self.factor*float(response)
 
+    def enable_cmd_emulation_mode(self):
+        """
+        enable_cmd_emulation_mode()
+
+        For use with a Fluke 8845A. Enables the Fluke 45 command set emulation 
+        mode
+        """
+        self.instrument.write("L2")
+
     def set_range(self, n, auto_range=False):
         """
         set_range(n, auto_range=False)
@@ -269,3 +278,45 @@ class Fluke_45(_Scpi_Instrument):
             raise IOError("Multimeter is not configured to measure frequency")
         else:
             return self._measure_signal()
+
+    def fetch_measurement(self):
+        """
+        fetch_measurement()
+
+        Fetch the measurement after a bus trigger
+        """
+        return self._measure_signal()
+
+    def set_trigger_source(self, source):
+        """
+        set_trigger_source(source)
+
+        Configure the meter trigger source
+
+        source (str): { INTernal or EXTernal }
+        """
+        trigger_type_num = 2 if 'ext' in source.lower() else 1
+        self.instrument.write(f"TRIGGER {trigger_type_num}")
+
+    def set_mode_adv(self, mode, range_n, rate):
+        """
+        set_mode_adv(mode, range_n, rate)
+
+        A one stop shop to configure the most common operating parameters
+
+        Args:
+            mode (str): type of measurement to be done
+                valid modes are 'AAC', 'ADC','VAC', 'VDC','OHMS', 'FREQ', 'CONT'
+                which correspond to AC current, DC current, AV voltage, DC voltage,
+                resistence, frequency, and continuity respectively (not case
+                sensitive)
+            range_n (int): Set the current range setting used for measurements.
+                valid settings are the integers 1 through 7, meaning of the index
+                depends on which measurement is being performed.
+            rate (str): speed of sampling
+                valid options are 'S','M', or 'F' for slow, medium, and fast
+                respectively (not case sensitive)
+        """
+        self.set_mode(mode)
+        self.set_range(range_n)
+        self.set_rate(rate)
