@@ -1,7 +1,7 @@
-from . import HP_34401A
+from .HP_34401A import HP_34401A as _HP_34401A
 
 
-class Fluke_8845A(HP_34401A):
+class Fluke_8845A(_HP_34401A):
     """
     Fluke_8845A(address, factor=1)
 
