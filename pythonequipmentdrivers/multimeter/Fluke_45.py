@@ -23,22 +23,22 @@ class Fluke_45(_Scpi_Instrument):
     def __init__(self, address, **kwargs):
         super().__init__(address, **kwargs)
         self.factor = kwargs.get('factor', 1.0)
-        self.valid_modes = ('AAC', 'ADC', 'VAC', 'VDC'
+        self.valid_modes = ('AAC', 'ADC', 'VAC', 'VDC',
                             'OHMS', 'FREQ', 'CONT')
 
-        # ensure RS232 buffer is empty
-        try:
-            # ensure exit of loop, not sure if the read buffer is even big
-            # enough for 256 query responses
-            max_reads = 256
-            read_cnt = 0
-            while read_cnt <= max_reads:
-                self.instrument.read()
-                read_cnt += 1
+        # # ensure RS232 buffer is empty
+        # try:
+        #     # ensure exit of loop, not sure if the read buffer is even big
+        #     # enough for 256 query responses
+        #     max_reads = 256
+        #     read_cnt = 0
+        #     while read_cnt <= max_reads:
+        #         self.instrument.read()
+        #         read_cnt += 1
 
-        # meter will not respond to reads if the buffer is empty
-        except VisaIOError:
-            pass  # emptied
+        # # meter will not respond to reads if the buffer is empty
+        # except VisaIOError:
+        #     pass  # emptied
 
         return None
 
@@ -53,7 +53,7 @@ class Fluke_45(_Scpi_Instrument):
         """
 
         response = self.instrument.query("VAL?")
-        self.instrument.read()  # to empty the buffer
+        # self.instrument.read()  # to empty the buffer
 
         return self.factor*float(response)
 
@@ -85,11 +85,11 @@ class Fluke_45(_Scpi_Instrument):
 
         if auto_range:
             self.instrument.write("AUTO")
-            self.instrument.read()  # to empty the buffer
+            # self.instrument.read()  # to empty the buffer
 
         if n in range(0, 7):
             self.instrument.write(f"RANGE {n}")
-            self.instrument.read()  # to empty the buffer
+            # self.instrument.read()  # to empty the buffer
         else:
             raise ValueError("Invalid range option, should be 1-7")
 
@@ -107,7 +107,7 @@ class Fluke_45(_Scpi_Instrument):
         """
 
         response = self.instrument.query("RANGE1?")
-        self.instrument.read()  # to empty the buffer
+        # self.instrument.read()  # to empty the buffer
         return int(response)
 
     def set_rate(self, rate):
@@ -124,7 +124,7 @@ class Fluke_45(_Scpi_Instrument):
         rate = rate.upper()
         if rate in ['S', 'M', 'F']:
             self.instrument.write(f"RATE {rate}")
-            self.instrument.read()  # to empty the buffer
+            # self.instrument.read()  # to empty the buffer
         else:
             raise ValueError("Invalid rate option, should be 'S','M', or 'F'")
         return None
@@ -138,7 +138,7 @@ class Fluke_45(_Scpi_Instrument):
         """
 
         response = self.instrument.query("RATE?")
-        self.instrument.read()  # to empty the buffer
+        # self.instrument.read()  # to empty the buffer
         return response.rstrip('\r\n')
 
     def set_mode(self, mode):
@@ -157,7 +157,7 @@ class Fluke_45(_Scpi_Instrument):
         mode = mode.upper()
         if mode in self.valid_modes:
             self.instrument.write(f"FUNC1 {mode}")
-            self.instrument.read()  # to empty the buffer
+            # self.instrument.read()  # to empty the buffer
         else:
             raise ValueError("Invalid mode option, valid options are: "
                              + f"{', '.join(self.valid_modes)}")
@@ -174,7 +174,7 @@ class Fluke_45(_Scpi_Instrument):
         """
 
         response = self.instrument.query("FUNC1?")
-        self.instrument.read()  # to empty the buffer
+        # self.instrument.read()  # to empty the buffer
         return response.rstrip('\r\n')
 
     def measure_voltage(self):
