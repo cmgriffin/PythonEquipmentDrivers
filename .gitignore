@@ -130,3 +130,4 @@ dmypy.json
 
 # Vscode Workspace Settings 
 .vscode/
+*.code-workspace

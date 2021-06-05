@@ -93,7 +93,7 @@ class Scpi_Instrument():
         Returns:
             str: uniquely identifies the instrument
         """
-        return self.instrument.query('*IDN?')
+        return self.query_raw_scpi('*IDN?')
 
     def cls(self):
         """
@@ -111,7 +111,7 @@ class Scpi_Instrument():
             None
         """
 
-        self.instrument.write('*CLS')
+        self.send_raw_scpi('*CLS')
         return None
 
     def rst(self):
@@ -128,7 +128,7 @@ class Scpi_Instrument():
             None
         """
 
-        self.instrument.write('*RST')
+        self.send_raw_scpi('*RST')
         return None
 
     @property
@@ -197,7 +197,6 @@ class Scpi_Instrument():
         function is intended to be used for API calls for functionally that is
         not currently supported. Only to be used for queries.
         """
-
         return self.instrument.query(query_str)
 
 
