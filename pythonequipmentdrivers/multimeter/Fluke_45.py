@@ -1,5 +1,9 @@
+import logging
+from pyvisa.constants import BufferOperation
 from pythonequipmentdrivers import Scpi_Instrument as _Scpi_Instrument
 from pythonequipmentdrivers import VisaIOError
+
+logger = logging.getLogger(__name__)
 
 
 class Fluke_45(_Scpi_Instrument):
@@ -25,22 +29,62 @@ class Fluke_45(_Scpi_Instrument):
         self.factor = kwargs.get('factor', 1.0)
         self.valid_modes = ('AAC', 'ADC', 'VAC', 'VDC',
                             'OHMS', 'FREQ', 'CONT')
-
-        # # ensure RS232 buffer is empty
-        # try:
-        #     # ensure exit of loop, not sure if the read buffer is even big
-        #     # enough for 256 query responses
-        #     max_reads = 256
-        #     read_cnt = 0
-        #     while read_cnt <= max_reads:
-        #         self.instrument.read()
-        #         read_cnt += 1
-
-        # # meter will not respond to reads if the buffer is empty
-        # except VisaIOError:
-        #     pass  # emptied
-
+        # if fluke 45 is using rs232 special considerations need to be taken
+        if "asrl" in address.lower():
+            self._is_serial = True
+            self.instrument.flush(BufferOperation.discard_receive_buffer)
+            self.instrument.read_termination = '\r\n'
+            self.instrument.write_termination = '\r\n'
+        else:
+            self._is_serial = False
         return None
+
+    def send_raw_scpi(self, command_str):
+        """
+        send_raw_scpi(command_str)
+
+        command_str: string, scpi command to be passed through to the device.
+
+        Pass-through function which forwards the contents of 'command_str' to
+        the device. This function is intended to be used for API calls for
+        functionally that is not currently supported. Can only be used for
+        commands, will not return queries.
+
+        A special version of this command for the Fluke45 due to issues with
+        pyvisa handling it natively
+        """
+        self.instrument.write(command_str)
+        if self._is_serial:
+            # serial version returns "=>" if the command is a success
+            # otherwise "?>"
+            # log this with an error so the user can see if something is wrong
+            resp = self.instrument.read()
+            if resp != "=>":
+                logger.error(f'{self} response to command was {resp}')
+            else:
+                logger.debug(f'{self} response to command was {resp}')
+        return None
+
+    def query_raw_scpi(self, query_str):
+        """
+        query_raw_scpi(query)
+
+        query_str: string, scpi query to be passed through to the device.
+
+        Pass-through function which forwards the contents of 'query_str' to
+        the device, returning the response without any processing. This
+        function is intended to be used for API calls for functionally that is
+        not currently supported. Only to be used for queries.
+        """
+        ret = self.instrument.query(query_str)
+        if self._is_serial:
+            # serial version returns "=>" if the command is a success
+            # otherwise "?>"
+            # log this with an error so the user can see if something is wrong
+            resp = self.instrument.read()
+            if resp != "=>":
+                logger.error(f'{self} response to command was {resp}')
+        return ret
 
     def _measure_signal(self):
         """
@@ -51,10 +95,7 @@ class Fluke_45(_Scpi_Instrument):
 
         returns: float
         """
-
-        response = self.instrument.query("VAL?")
-        # self.instrument.read()  # to empty the buffer
-
+        response = self.query_raw_scpi("VAL?")
         return self.factor*float(response)
 
     def enable_cmd_emulation_mode(self):
@@ -64,7 +105,7 @@ class Fluke_45(_Scpi_Instrument):
         For use with a Fluke 8845A. Enables the Fluke 45 command set emulation 
         mode
         """
-        self.instrument.write("L2")
+        self.send_raw_scpi("L2")
 
     def set_range(self, n, auto_range=False):
         """
@@ -84,12 +125,9 @@ class Fluke_45(_Scpi_Instrument):
         """
 
         if auto_range:
-            self.instrument.write("AUTO")
-            # self.instrument.read()  # to empty the buffer
-
+            self.send_raw_scpi("AUTO")
         if n in range(0, 7):
-            self.instrument.write(f"RANGE {n}")
-            # self.instrument.read()  # to empty the buffer
+            self.send_raw_scpi(f"RANGE {n}")
         else:
             raise ValueError("Invalid range option, should be 1-7")
 
@@ -106,8 +144,7 @@ class Fluke_45(_Scpi_Instrument):
         returns: int
         """
 
-        response = self.instrument.query("RANGE1?")
-        # self.instrument.read()  # to empty the buffer
+        response = self.query_raw_scpi("RANGE1?")
         return int(response)
 
     def set_rate(self, rate):
@@ -123,8 +160,7 @@ class Fluke_45(_Scpi_Instrument):
 
         rate = rate.upper()
         if rate in ['S', 'M', 'F']:
-            self.instrument.write(f"RATE {rate}")
-            # self.instrument.read()  # to empty the buffer
+            self.send_raw_scpi(f"RATE {rate}")
         else:
             raise ValueError("Invalid rate option, should be 'S','M', or 'F'")
         return None
@@ -137,8 +173,7 @@ class Fluke_45(_Scpi_Instrument):
         returns: str
         """
 
-        response = self.instrument.query("RATE?")
-        # self.instrument.read()  # to empty the buffer
+        response = self.query_raw_scpi("RATE?")
         return response.rstrip('\r\n')
 
     def set_mode(self, mode):
@@ -156,8 +191,7 @@ class Fluke_45(_Scpi_Instrument):
 
         mode = mode.upper()
         if mode in self.valid_modes:
-            self.instrument.write(f"FUNC1 {mode}")
-            # self.instrument.read()  # to empty the buffer
+            self.send_raw_scpi(f"{mode}")
         else:
             raise ValueError("Invalid mode option, valid options are: "
                              + f"{', '.join(self.valid_modes)}")
@@ -173,8 +207,7 @@ class Fluke_45(_Scpi_Instrument):
         returns: str
         """
 
-        response = self.instrument.query("FUNC1?")
-        # self.instrument.read()  # to empty the buffer
+        response = self.query_raw_scpi("FUNC1?")
         return response.rstrip('\r\n')
 
     def measure_voltage(self):
@@ -296,7 +329,7 @@ class Fluke_45(_Scpi_Instrument):
         source (str): { INTernal or EXTernal }
         """
         trigger_type_num = 2 if 'ext' in source.lower() else 1
-        self.instrument.write(f"TRIGGER {trigger_type_num}")
+        self.send_raw_scpi(f"TRIGGER {trigger_type_num}")
 
     def set_mode_adv(self, mode, range_n, rate):
         """
