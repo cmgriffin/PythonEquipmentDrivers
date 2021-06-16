@@ -75,7 +75,9 @@ class Scpi_Instrument():
         if rm is None:
             init()
         self.address = address
-        self.instrument = rm.open_resource(self.address)
+        resource_pyclass = kwargs.get('resource_pyclass')
+        self.instrument = rm.open_resource(
+            self.address, resource_pyclass=resource_pyclass)
         self.timeout = kwargs.get('timeout', 1000)
         return None
 
