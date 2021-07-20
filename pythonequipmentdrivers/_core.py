@@ -6,17 +6,7 @@ from pathlib import Path
 
 
 # Globals
-rm = None
-
-
-def init(visa_libary=""):
-    """Intialize resource manager optionally tied to the specified library
-
-    Args:
-        visa_libary (str, optional): Visa library string to use e.g. "@py", "@IVI"
-    """
-    global rm
-    rm = pyvisa.ResourceManager(visa_libary)
+rm = pyvisa.ResourceManager()
 
 
 # Utility Functions
@@ -24,8 +14,6 @@ def get_devices_addresses():
     """
     returns a list of the addresses of peripherals connected to the computer
     """
-    if rm is None:
-        init()
     return rm.list_resources()
 
 
@@ -46,8 +34,6 @@ def identify_devices(verbose=False):
          ...
          (address_n, idn_response_n))
     """
-    if rm is None:
-        init()
     scpi_devices = []
     for address in rm.list_resources():
         try:
@@ -71,15 +57,42 @@ def identify_devices(verbose=False):
 
 
 class Scpi_Instrument():
+
+    _serial_instruments = []
+
     def __init__(self, address, **kwargs):
-        if rm is None:
-            init()
         self.address = address
-        resource_pyclass = kwargs.get('resource_pyclass')
-        self.instrument = rm.open_resource(
-            self.address, resource_pyclass=resource_pyclass)
+        self.instrument = self.open_instrument(address)
         self.timeout = kwargs.get('timeout', 1000)
         return None
+
+    def open_instrument(self, address):
+        """
+        open_instrument(address)
+
+        Replaces the normal rm.open_resource so that serial devices can be
+        handled specially. A least with the pyvisa-py libarary, opening the
+        same serial device multiple times results in a SerialException being
+        raised. A class attribute list of already opened serial ports is 
+        maintained. If a Serial Exception is raised, the list will be searched
+        for a matching already opened port
+
+        Args:
+            address (str): Visa style resource string
+
+        Returns:
+            pyvisa.Resource: Same resource instance as returned by
+            the pyvisa ResourceManager
+        """
+        for addr, inst in self._serial_instruments:
+            if addr in address.upper():
+                return inst
+        # if no matching address was found then we need to open it
+        instrument = rm.open_resource(address)
+        # append the short form ASRLn to the list
+        address_short = address.split("::")[0]
+        type(self)._serial_instruments.append((address_short, instrument))
+        return instrument
 
     @property
     def idn(self):
