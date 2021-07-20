@@ -1,27 +1,74 @@
 from pythonequipmentdrivers import Scpi_Instrument as _Scpi_Instrument
 
 
-class HP_3478A(_Scpi_Instrument):
+class HP_3478A_AR488(_Scpi_Instrument):
+
+    valid_modes = {'VDC': "F1",
+                   'VAC': "F2",
+                   'ADC': "F5",
+                   'AAC': "F6",
+                   'OHMS': "F3"}
+    ranges = {
+        'VDC': ((0.03, 'R-2'), (0.3, 'R-1'), (3.0, 'R0'), (30.0, 'R1'),
+                (300.0, 'R2')),
+        'VAC': ((0.3, 'R-1'), (3.0, 'R0'), (30.0, 'R1'), (300.0, 'R2')),
+        'ADC': ((0.3, 'R-1'), (3.0, 'R0')),
+        'AAC': ((0.3, 'R-1'), (3.0, 'R0')),
+        'OHMS': ((30, 'R1'), (300, 'R2'), (3E3, 'R3'),
+                 (3E4, 'R4'), (3e5, 'R5'), (3E6, 'R6'), (3E7, 'R7'))
+    }
+    triggers = {'INTERNAL': 'T1', 'EXTERNAL': 'T2', 'SINGLE': 'T3'}
+    status_lookup = [
+        ('Function Range and Number of Digits', [(0xE0, {1: 'VDC', 2: 'VAC', 3: 'OHMS',
+                                                         4: 'OHMS', 5: 'ADC', 6: 'AAC', 7: 'OHMS'}),
+                                                 (0x1C, {1: '30mV DC, 300mV AC, 30 ohm, 300mA AC or DC, ohms extended',
+                                                         2: '300mV DC, 3V AC, 300 ohm, 3A AC or DC',
+                                                         3: '3V DCM, 30V AC, 3K ohm',
+                                                         4: '30V DC, 300V AC 30K ohm',
+                                                         5: '300V DC, 300K ohm',
+                                                         6: '3M ohm',
+                                                         7: '30M ohm'}
+                                                  ),
+                                                 (0x03, {1: '5.5 Digit Mode', 2: '4.5 Digit Mode', 3: '3.5 Digit Mode'})]),
+        ('Status Bits', ['Always 0', 'External Trigger Enabled', 'Cal RAM Enabled', 'Front/Rear SW in Front Pos',
+                         '50Hz Line Freq Set', 'Auto-Zero Enabled', 'Internal Trigger Enabled']),
+        ('Serial Poll Mask', ['PON SRQ switch on last POR or CLS Recv', 'Always 0', 'SRQ if CAL Procedure Failed',
+                              'SRQ if SRQ key pressed', 'SRQ if HW error', 'SRQ if syntax error', 'Unused', 'SRQ as every reading avail']),
+        ('Error Information', ['Always 0', 'Always 0', 'A/D link failure', 'A/D slope error',
+                               'ROM selftest failed', 'RAM selftest failed', 'CAL RAM bad checksum']),
+        ('DAC Value', 'RAW')
+    ]
+
     def __init__(self, address, **kwargs):
-        super().__init__(address, **kwargs)
+        self.address = address
+        self.gpib_address = kwargs.get('gpib_address')
+        try:
+            import ar488py
+        except ImportError:
+            raise NotImplementedError(
+                "HP_3478A implementation is limited to use with the AR488/Prologix \
+                 GPIB adapter"
+            )
+        self.intf = ar488py.Ar488(address)
+        if self.gpib_address is not None:
+            self.intf.target_addr = self.gpib_address
         self.factor = kwargs.get('factor', 1.0)
-        self.valid_modes = {'VDC': "F1",
-                            'VAC': "F2",
-                            'ADC': "F5",
-                            'AAC': "F6",
-                            'OHMS': "F3"}
-        self.ranges = {
-            'VDC': {0.03: 'R-2', 0.3: 'R-1', 3.0: 'R0', 30.0: 'R1',
-                    300.0: 'R2'},
-            'VAC': {0.3: 'R-1', 3.0: 'R0', 30.0: 'R1', 300.0: 'R2'},
-            'ADC': {0.3: 'R-1', 3.0: 'R0'},
-            'AAC': {0.3: 'R-1', 3.0: 'R0'},
-            'OHMS': {30: 'R1', 300: 'R1', 3E3: 'R3',
-                     3E4: 'R4', 3e5: 'R5', 3E6: 'R6', 3E7: 'R7'}
-        }
-        self.triggers = {'INTERNAL': 'T1', 'EXTERNAL': 'T2', 'SINGLE': 'T3'}
-        self._current_mode = None
-        self.set_mode('VDC')
+
+    def close(self):
+        self.intf.close()
+
+    def __del__(self):
+        self.close()
+
+    def idn(self):
+        raise TypeError('Command Not Supported')
+
+    def cls(self):
+        return self.intf.send_clr()
+
+    def get_mode(self):
+
+        return self.get_status()[1][0]
 
     def set_mode(self, mode):
         """
@@ -37,7 +84,7 @@ class HP_3478A(_Scpi_Instrument):
         mode = mode.upper()
         if mode in self.valid_modes:
             self._current_mode = mode
-            self.instrument.write(self.valid_modes[mode])
+            self.intf.write(self.valid_modes[mode])
         else:
             raise ValueError("Invalid mode option")
         return None
@@ -53,7 +100,7 @@ class HP_3478A(_Scpi_Instrument):
             Corresponds to 0.1, 1, and 10 NPLC
         """
         if digits in range(3, 5+1):
-            self.instrument.write(f'N{digits}')
+            self.intf.write(f'N{digits}')
         else:
             raise ValueError('Invalid resolution setting')
 
@@ -68,20 +115,9 @@ class HP_3478A(_Scpi_Instrument):
         """
         trigger = trigger.upper()
         if trigger in self.triggers:
-            self.instrument.write(self.triggers[trigger])
+            self.intf.write(self.triggers[trigger])
         else:
             raise ValueError('Invalid trigger setting')
-
-    def get_mode(self):
-        """
-        get_mode()
-
-        retrives type of measurement the multimeter is current configured to
-        perform.
-
-        returns: str
-        """
-        return self._current_mode
 
     def set_range(self, max_value):
         """
@@ -90,9 +126,9 @@ class HP_3478A(_Scpi_Instrument):
         Args:
             max_value (float): Maximum measurement value expected
         """
-        for range_, command in self.ranges[self._current_mode].items():
+        for range_, command in self.ranges[self._current_mode]:
             if max_value < range_:
-                self.instrument.write(command)
+                self.intf.write(command)
                 return
         raise ValueError(f'{max_value=} is greater than highest range')
 
@@ -105,7 +141,7 @@ class HP_3478A(_Scpi_Instrument):
             enabled (bool, optional): Defaults to True.
         """
         cmd = 'Z1' if enabled else 'Z0'
-        self.instrument.write(cmd)
+        self.intf.write(cmd)
 
     def set_display(self, msg='', disable_display_udpates=False):
         """
@@ -119,27 +155,52 @@ class HP_3478A(_Scpi_Instrument):
         """
         if len(msg) > 0:
             if disable_display_udpates:
-                self.instrument.write('D3'+msg)
+                self.intf.write('D3'+msg)
             else:
-                self.instrument.write('D2'+msg)
+                self.intf.write('D2'+msg)
         else:
-            self.instrument.write('D1')
+            self.intf.write('D1')
 
-    def get_status(self, print_verbose=True):
+    @staticmethod
+    def _shift_by_mask(mask, val):
+        while not(mask & 0x1):
+            mask >>= 1
+            val >>= 1
+        val &= mask
+        return val
+
+    def get_status(self):
         """
         Query the DMM status register
 
         Args:
             print_verbose (bool, optional): Print out a verbose description of 
             the status. Defaults to True.
+            display_all_bits (bool, option): Display all the status/error bits,
+            instead of just the ones that are set
 
         Returns:
             tuple: Values of the status bytes
         """
-        self.instrument.write('B')
-        raw = tuple(self.instrument.read_bytes(5))
 
-        return raw
+        self.intf.write('B')
+        raw = list(self.intf.read()[:5])
+        #raw = [ord(b) for b in raw]
+        out_list = []
+        for byte, (desc, lookup) in zip(raw, self.status_lookup):
+            if isinstance(lookup, list):
+                for index, item in enumerate(lookup):
+                    if isinstance(item, tuple):
+                        mask, d = item
+                        val = self._shift_by_mask(mask, byte)
+                        out_list.append(d[val])
+                    elif isinstance(item, str):
+                        bitval = byte & 2**(7-index)
+                        if bitval:
+                            out_list.append(item)
+            elif lookup == 'RAW':
+                out_list.append(byte)
+        return raw, out_list
 
     def _measure_signal(self):
         """
@@ -150,7 +211,7 @@ class HP_3478A(_Scpi_Instrument):
 
         returns: float
         """
-        return float(self.instrument.read())
+        return float(self.intf.read())
 
     def measure_voltage(self):
         """
