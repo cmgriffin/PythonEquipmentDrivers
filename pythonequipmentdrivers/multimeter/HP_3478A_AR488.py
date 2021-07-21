@@ -2,6 +2,22 @@ from pythonequipmentdrivers import Scpi_Instrument as _Scpi_Instrument
 
 
 class HP_3478A_AR488(_Scpi_Instrument):
+    """
+    HP_3478A_AR488(address, factor=1, gpib_address=None)
+
+    address: str, address of the AR488/Prologix USB to GPIB Adapter
+
+    factor: float, multiplicitive scale for all measurements defaults to 1.
+
+    gpib_address: the GPIB address of the HP3478A, typically 23. A default
+    value of None results in no change to the adapter's current address
+
+    Object for accessing basic functionallity of the HP3478A multimeter.
+    This device is located where it can only be used with an AR488 so it proved
+    not a great use of time to make the class compatible with a more standard 
+    NI GPIB adapter. This class requires use of AR488py from 
+    https://github.com/cmgriffin/AR488
+    """
 
     valid_modes = {'VDC': "F1",
                    'VAC': "F2",
@@ -211,7 +227,7 @@ class HP_3478A_AR488(_Scpi_Instrument):
 
         returns: float
         """
-        return float(self.intf.read())
+        return float(self.intf.read()*self.factor)
 
     def measure_voltage(self):
         """
