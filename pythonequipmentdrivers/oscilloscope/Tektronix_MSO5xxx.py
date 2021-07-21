@@ -1,9 +1,11 @@
-from pythonequipmentdrivers import Scpi_Instrument as _Scpi_Instrument
-import struct as _struct
-import numpy as _np
+from pythonequipmentdrivers import Scpi_Instrument
+import struct
+import numpy as np
+from pathlib import Path
+from typing import Union, Tuple
 
 
-class Tektronix_MSO5xxx(_Scpi_Instrument):
+class Tektronix_MSO5xxx(Scpi_Instrument):
     """
     Tektronix_MSO5xxx(address)
 
@@ -13,7 +15,7 @@ class Tektronix_MSO5xxx(_Scpi_Instrument):
     Family of Oscilloscopes
     """
 
-    def __init__(self, address, **kwargs):
+    def __init__(self, address: str, **kwargs) -> None:
         super().__init__(address, **kwargs)
 
         # get image formatting
@@ -22,17 +24,16 @@ class Tektronix_MSO5xxx(_Scpi_Instrument):
         self.instrument.write('HARDC:PALE COLOR')  # color image (alt INKS)
         self.instrument.write('HARDC:LAY LAN')  # landscape image
         self.instrument.write('HARDC:VIEW FULLNO')  # no menu, full-screen wvfm
-        return None
 
-    def select_channel(self, channel, state):
+    def select_channel(self, channel: int, state: bool) -> None:
         """
         select_channel(channel)
 
         channel: int, channel number of channel
                     valid options are 1,2,3, and 4
 
-        state: int, whether or not the respective channel is
-                selected/visable on the screen. Valid options are 0 or 1
+        state: bool, whether or not the respective channel is
+                selected/visable on the screen.
 
         selects the specified channel. This is allow the specified channel
         to be seen on top of the others in the display. With a given
@@ -40,385 +41,380 @@ class Tektronix_MSO5xxx(_Scpi_Instrument):
         the selected channel.
         """
 
-        cmd_str = f'SEL:CH{channel} '
-        if state == 1:
-            cmd_str += "ON"
-        elif state == 0:
-            cmd_str += "OFF"
-        else:
-            raise ValueError(f"Invalid arguement 'state': {state}")
+        cmd_str = f"SEL:CH{int(channel)} {'ON' if state else 'OFF'}"
         self.instrument.write(cmd_str)
-        return None
 
-    # investigate using faster data encoding scheme     # check
-    def get_channel_data(self, channel, start_percent=0, stop_percent=100):
+    def get_channel_data(self, *channels: int, **kwargs) -> Tuple:
         """
-        get_channel_data(channel, start_percent=None, stop_percent=None)
+        get_channel_data(*channels, start_percent=0, stop_percent=100,
+                         return_time=True, dtype=np.float32)
 
-        channel: int, channel number of the waveform to be transferred.
-            valid options are 1,2,3, and 4
-        start_percent (optional): int, point in time to begin the waveform
-                                    transfer number represents percent of the
-                                    record length. Valid settings are 0-100.
-                                    Default is 0%
-        stop_percent (optional): int, point in time to end the waveform
-                                    transfer number represents percent of the
-                                    record length. Valid settings are 0-100.
-                                    Default is 100%
-
-        returns: tuple, (time array, amplitude array), both arrays are of
-                    floats
-
-        returns waveform data from the oscilloscope on the specified
-        channel. Optionally points to start / stop the transfer can be
+        Retrieves waveform data from the oscilloscope on the specified
+        channel(s). Optionally points to start / stop the transfer can be
         given. start_percent and stop_percent can be set independently, the
         waveform returned will always start from the smaller of the two and
-        go to the largest. By default the entire waveform will be
-        transferred.
+        go to the largest.
+
+        Args:
+            *channels: (int, Iterable[int]) or sequence of ints, channel
+                number(s) of the waveform(s) to be transferred.
+
+        Kwargs:
+            start_percent (int, optional): point in time to begin the waveform
+                transfer number represents percent of the record length. Valid
+                settings are 0-100. Defaults to 0.
+            stop_percent (int, optional): point in time to begin the waveform
+                transfer number represents percent of the record length. Valid
+                settings are 0-100. Defaults to 100.
+            return_time (bool, optional): Whether or not to return the time
+                array with the rest of the waveform data. Defaults to True.
+            dtype (type, optional): data type to be used for waveform data.
+                Defaults to float32.
+
+        Returns:
+            Union[tuple, numpy.array]: waveform data. if len(channels) > 1 or
+                or if return_time is true this is a tuple of numpy arrays. If
+                time information is returned it will always be the first value,
+                any additional waveforms will be returned in the same order
+                they were passed. In the case of len(channels) == 1 and
+                return_time is False a single numpy array is returned
         """
 
-        # get data to define waveform capture with indexes
-        record_len = self.get_record_length()
+        # get record window metadata
+        N = self.get_record_length()
+        x_offset = int(self.get_trigger_position()/100*N)
 
-        #   enforce valid start/stop points
-        start_percent = int(_np.clip(start_percent, 0, 100))
-        stop_percent = int(_np.clip(stop_percent, 0, 100))
+        # formatting info
+        dtype = kwargs.get('dtype', np.float32)
+        start_idx = np.clip(kwargs.get('start_percent', 0), 0, 100)/100*N
+        stop_idx = np.clip(kwargs.get('stop_percent', 100), 0, 100)/100*N
 
-        start_idx = int(start_percent/100*record_len)
-        stop_idx = int(stop_percent/100*record_len)
+        waves = []
+        for channel in channels:
 
-        # configure data transfer
-        self.instrument.write(f'DATA:START {start_idx}')  # array start pos
-        self.instrument.write(f'DATA:STOP {stop_idx}')  # array stop pos
-        self.instrument.write(f'DATA:SOU CH{channel}')  # data source
-        #   byte enc. (signe int little-endian)
-        self.instrument.write('DATA:ENC SRP')
+            # configure data transfer
+            self.instrument.write(f'DATA:START {start_idx}')  # data range
+            self.instrument.write(f'DATA:STOP {stop_idx}')
+            self.instrument.write(f'DATA:SOU CH{channel}')  # data source
+            self.instrument.write('DATA:ENC SRP')  # encoding, int little-end
 
-        # get info to convert bytes to an analog waveform
-        #   number of counts corresponding to amp of 0
-        bytes_offset = float(self.instrument.query("WFMPRE:YOFF?"))
+            # get waveform metadata
+            dt = float(self.instrument.query('WFMPRE:XINCR?'))  # sampling time
+            y_offset = float(self.instrument.query('WFMPRE:YOFF?'))
+            y_scale = float(self.instrument.query('WFMPRE:YMULT?'))
 
-        #   conversion between counts and amp
-        bytes_amp_scale = float(self.instrument.query("WFMPRE:YMULT?"))
+            adc_offset = float(self.instrument.query('WFMPRE:YZERO?'))
 
-        #   offset of the waveform on the scope
-        wvfrm_offset = float(self.instrument.query("WFMPRE:YZERO?"))
+            # get raw data, strip header
+            self.instrument.write('CURVE?')
+            raw_data = self.instrument.read_raw()
 
-        #   sampling time
-        dt = float(self.instrument.query("WFMPRE:XINCR?"))
+            header_len = 2 + int(raw_data[1])
+            raw_data = raw_data[header_len:-1]
 
-        # get the data
-        self.instrument.write('CURVE?')
-        data = self.instrument.read_raw()
+            data = np.array(struct.unpack(f'{len(raw_data)}B', raw_data),
+                            dtype=dtype)
 
-        #   strip off header
-        header_len = 2 + int(data[1])
-        adc_wave = data[header_len:-1]
+            # decode into measured value using waveform metadata
+            wave = (data - y_offset)*y_scale + adc_offset
+            waves.append(wave)
 
-        # convert from byte-string to array (counts)
-        adc_wave = _np.array(_struct.unpack('%sB' % len(adc_wave),
-                                            adc_wave))
+        if kwargs.get('return_time', True):
+            # generate time vector / account for trigger position
+            # all waveforms assumed to have same duration (just use last)
+            t = np.arange(0, dt*len(wave), dt, dtype=dtype)
+            t -= (x_offset - min([start_idx, stop_idx]))*dt
 
-        # convert to analog waveform
-        amplitude_array = (adc_wave - bytes_offset)*bytes_amp_scale
-        amplitude_array += wvfrm_offset
+            return (t, *waves)
+        else:
+            if len(waves) == 1:
+                return waves[0]
+            return tuple(waves)
 
-        time_array = _np.arange(0, dt*len(amplitude_array), dt)
-
-        # accounting for trigger position
-        trig_percent = self.get_trigger_position()
-        trig_idx = int(trig_percent/100*record_len)
-        time_array -= (trig_idx - min([start_idx, stop_idx]))*dt
-
-        return time_array, amplitude_array
-
-    def set_channel_label(self, channel, label):
+    def set_channel_label(self, channel: int, label: str) -> None:
         """
         set_channel_label(channel, label)
 
-        channel: int/list, channel number or list of channel numbers to
-                    update label of.
-        label: str/list, text label or list of text labels to assign to
-                each channel listed in "channel"
-
         updates the text label on a channel specified by "channel" with the
-        value given in "label". Alternatively, lists can be passed for each
-        channel and label to set multiple labels at once. List inputs
-        should be the same length for both inputs
+        value given in "label".
+
+        Args:
+            channel (int): channel number to update label of.
+            label (str): text label to assign to the specified
         """
 
-        if type(channel) == list and type(label) == list:
-            if len(channel) != len(label):
-                raise ValueError("Lengths of 'channel' and 'label' are "
-                                 + "mismatched")
-            for chan, lab in zip(channel, label):
-                self.instrument.write(f'CH{chan}:LAB:NAM "{lab}"')
+        self.instrument.write(f'CH{int(channel)}:LAB:NAM "{label}"')
 
-        elif type(channel) == int and type(label) == str:
-            self.instrument.write(f'CH{channel}:LAB:NAM "{label}"')
-
-        else:
-            raise ValueError("Channel should be int or list of ints, label"
-                             + " should be string or list of strings")
-        return None
-
-    def get_channel_label(self, channel):
+    def get_channel_label(self, channel: int) -> str:
         """
         get_channel_label(channel)
 
-        channel: int channel number to get label of.
+        retrives the label currently used by the specified channel
 
-        retrives the label currently used by the channel specified by
-        'channel'
+        Args:
+            channel (int): channel number to get label of.
 
-        returns string
+        Returns:
+            (str): specified channel label
         """
-        response = self.instrument.query(f"CH{channel}:LAB:NAM?")
+
+        response = self.instrument.query(f'CH{channel}:LAB:NAM?')
         return response.strip().replace('"', '')
 
-    def set_channel_label_position(self, channel, rel_coords):
+    def set_channel_label_position(self, channel: int, pos: tuple) -> None:
         """
-        set_channel_label_position(channel, rel_coords)
+        set_channel_label_position(channel, pos)
 
-        channel: int, channel number of channel whose bandwidth setting
-                    will be adjusted. valid options are 1, 2, 3, and 4.
+        Configures the placement of label text relative to the 0 amplitude
+        point on the display for a given channel.
 
-        re_coords is a tuple (float, float) of the relative x,y positon of
-        the channel label w.r.t. the numerical label in # of divisions
+        Args:
+            channel (int): channel number to adjust
+            pos (Tuple[float, float]): the relative x, y positon of
+                the channel label with respect to the waveform as number of
+                divisions.
         """
-        x_coord, y_coord = rel_coords
-        self.instrument.write(f'CH{channel}:LAB:XPOS {x_coord}')
-        self.instrument.write(f'CH{channel}:LAB:YPOS {y_coord}')
-        return None
 
-    def get_channel_label_position(self, channel):
+        if (not isinstance(pos, (tuple, list))) or (len(pos) != 2):
+            raise ValueError('Arg "pos" must be an iterable of length 2')
+
+        x_coord, y_coord = pos
+
+        self.instrument.write(f'CH{int(channel)}:LAB:XPOS {float(x_coord)}')
+        self.instrument.write(f'CH{int(channel)}:LAB:YPOS {float(y_coord)}')
+
+    def get_channel_label_position(self, channel: int) -> Tuple[float, float]:
         """
         get_channel_label_position(channel)
 
-        channel: int, channel number of channel whose bandwidth setting
-                    will be adjusted. valid options are 1, 2, 3, and 4.
+        Retrivies the configuration of the placement of label text relative to
+        the 0 amplitude point on the display for a given channel.
 
-        returns a tuple (float, float) of the relative x,y positon of the
-        channel label w.r.t. the numerical label in # of divisions
+        Args:
+            channel (int): hannel number to query
+
+        Returns:
+            Tuple[float, float]: the relative x, y positon of the channel label
+                with respect to the waveform as a number of divisions.
         """
-        x_coord = float(self.instrument.query(f'CH{channel}:LAB:XPOS?'))
-        y_coord = float(self.instrument.query(f'CH{channel}:LAB:YPOS?'))
-        return x_coord, y_coord
 
-    def set_channel_bandwidth(self, channel, bandwidth):
+        x_coord = float(self.instrument.query(f'CH{int(channel)}:LAB:XPOS?'))
+        y_coord = float(self.instrument.query(f'CH{int(channel)}:LAB:YPOS?'))
+
+        return (x_coord, y_coord)
+
+    def set_channel_bandwidth(self, channel: int, bandwidth: float) -> None:
         """
         set_channel_bandwidth(channel, bandwidth)
 
-        channel: int, channel number of channel whose bandwidth setting
-                    will be adjusted. valid options are 1, 2, 3, and 4.
-        bandwidth: int or float, desired bandwidth setting for "channel"
-                    in Hz
-
-        sets the bandwidth limiting of "channel" to the value specified by
-        "bandwidth".
-
-        Note: different probes have different possible bandwidth settings,
-        if the value specified in this function isn't availible on the
-        probe connected to the specified input it will likely round UP to
+        Sets the bandwidth limiting of "channel" to the value specified by
+        "bandwidth". Note: different probes have different possible bandwidth
+        settings, if the value specified in this function isn't availible on
+        the probe connected to the specified input it will likely round UP to
         the nearest availible setting
-        """
-        if type(bandwidth) == str:
-            if bandwidth.upper() == 'FULL':
-                self.instrument.write(f"CH{channel}:BAN FULL")
-        else:
-            self.instrument.write(f"CH{channel}:BAN {bandwidth}")
-        return None
 
-    def get_channel_bandwidth(self, channel):
+        Args:
+            channel (int): channel number to configure
+            bandwidth (float): desired bandwidth setting for "channel" in Hz
+        """
+
+        if isinstance(bandwidth, str) and (bandwidth.upper() == 'FULL'):
+            self.instrument.write(f"CH{int(channel)}:BAN FULL")
+        else:
+            self.instrument.write(f"CH{int(channel)}:BAN {float(bandwidth)}")
+
+    def get_channel_bandwidth(self, channel: int) -> float:
         """
         get_channel_bandwidth(channel)
 
-        channel: int, channel number of channel
-                    valid options are 1,2,3, and 4
+        Retrives the bandwidth setting used by the specified channel in Hz.
 
-        retrived bandwidth limiting setting used by the specified channel
-        in Hz.
+        Args:
+            channel (int): channel number to query information on
 
-        returns float
+        Returns:
+            float: channel bandwidth setting
         """
 
-        response = self.instrument.query(f"CH{channel}:BAN?")
+        response = self.instrument.query(f"CH{int(channel)}:BAN?")
         return float(response)
 
-    def set_channel_scale(self, channel, scale):
+    def set_channel_scale(self, channel: int, scale: float) -> None:
         """
         set_channel_scale(channel, scale)
 
-        channel: int, channel number of channel
-                    valid options are 1,2,3, and 4
-
-        scale: int/float, scale of the channel amplitude across one
-        vertical division on the display.
-
         sets the scale of vertical divisons for the specified channel
+
+        Args:
+            channel (int): channel number to query information on
+            scale (float): scale of the channel amplitude across one
+                vertical division on the display.
         """
 
-        self.instrument.write(f"CH{channel}:SCA {scale}")
-        return None
+        self.instrument.write(f'CH{int(channel)}:SCA {float(scale)}')
 
     def get_channel_scale(self, channel):
         """
         get_channel_scale(channel)
 
-        channel: int, channel number of channel
-                    valid options are 1,2,3, and 4
+        Retrives the scale for vertical divisons for the specified channel
 
-        retrives the scale for vertical divisons for the specified channel
+        Args:
+            channel (int): channel number to query information on
 
-        returns: float
+        Returns:
+            (float): vertical scale
         """
 
-        response = self.instrument.query(f"CH{channel}:SCA?")
+        response = self.instrument.query(f'CH{int(channel)}:SCA?')
         return float(response)
 
-    def set_channel_offset(self, channel, offset):
+    def set_channel_offset(self, channel: int, off: float) -> None:
         """
-        set_channel_offset(channel, offset)
+        set_channel_offset(channel, off)
 
-        channel: int, channel number of channel
-            valid options are 1,2,3, and 4
+        Sets the vertical offset for the display of the specified channel.
 
-        offset: int/float, offset added to the channels waveform on the
-                display.
-
-        sets the vertical offset for the display of the specified channel.
+        Args:
+            channel (int): Channel number to query
+            off (float): vertical/amplitude offset
         """
 
-        self.instrument.write(f"CH{channel}:OFFS {offset}")
-        return None
+        self.instrument.write(f"CH{int(channel)}:OFFS {float(off)}")
 
-    def get_channel_offset(self, channel):
+    def get_channel_offset(self, channel: int) -> float:
         """
         get_channel_offset(channel)
 
-        channel: int, channel number of channel
-                    valid options are 1,2,3, and 4
+        Retrives the vertical offset for the display of the specified channel.
 
-        retrives the vertical offset for the display of the specified
-        channel.
+        Args:
+            channel (int): Channel number to query
 
-        returns: float
+        Returns:
+            float: vertical/amplitude offset
         """
 
-        response = self.instrument.query(f"CH{channel}:OFFS?")
+        response = self.instrument.query(f"CH{int(channel)}:OFFS?")
         return float(response)
 
-    def set_channel_position(self, channel, position):
+    def set_channel_position(self, channel: int, position: float) -> None:
         """
         set_channel_position(channel, position)
 
-        channel: int, channel number of channel
-                    valid options are 1,2,3, and 4
+        Sets the vertical postion of the 0 amplitude line in the display of the
+        specified channel's waveform. The veritcal position is represented a
+        number of vertical division on the display (from the center). Can be
+        positive negative or fractional.
 
-        position: int/float, vertical postion of the 0 point for 'channel'
-
-        sets the vertical postion for the 0 point of the waveform
-        specified by 'channel'
-        position is represented by +/- number of division from the middle
-        of the screen.
+        Args:
+            channel (int): Channel number to query
+            position (float): vertical postion of the 0 amplitude position in
+                the display of the specified channel waveform.
         """
 
-        self.instrument.write(f"CH{channel}:POS {position}")
-        return None
+        self.instrument.write(f"CH{int(channel)}:POS {float(position)}")
 
-    def get_channel_position(self, channel):
+    def get_channel_position(self, channel: int) -> float:
         """
         get_channel_position(channel)
 
-        channel: int, channel number of channel
-                    valid options are 1,2,3, and 4
+        Retrieves the vertical postion of the 0 amplitude line used in the
+        display of the specified channel's waveform. The veritcal position is
+        represented a number of vertical division on the display (from the
+        center). Can be positive negative or fractional.
 
-        retrieves the vertical postion for the 0 point of the waveform
-        specified by 'channel' position is represented by +/- number of
-        division from the middle of the screen.
+        Args:
+            channel (int): Channel number to query
 
-        returns: float
+        Returns:
+            float: vertical postion of the 0 amplitude position in the display
+                of the specified channel waveform.
         """
 
-        response = self.instrument.query(f"CH{channel}:POS?")
+        response = self.instrument.query(f"CH{int(channel)}:POS?")
         return float(response)
 
-    def set_channel_coupling(self, channel, coupling):
+    def set_channel_coupling(self, channel: int, coupling: str) -> None:
         """
         set_channel_coupling(channel, coupling)
 
-        channel: int, channel number of channel
-                    valid options are 1,2,3, and 4
-        coupling: (str) coupling mode, valid options are "DC", "AC", "GND",
-                    and "DC REJ". (not case-sensitive)
+        Sets the coupling used on a the specified channel. For this
+        oscilloscope the following coupling options are supported: "DC", "AC",
+        "GND", and "DC REJ"
 
-        sets the coupling used on a the specified channel.
+        Args:
+            channel (int): channel number to adjust
+            coupling (str): coupling mode
         """
 
-        coupling = coupling.upper()
-        if coupling not in ["DC", "AC", "GND", "DCREJ"]:
-            raise ValueError(f"Invalid Coupling option: {coupling}")
-        self.instrument.write(f"CH{channel}:COUP {coupling}")
-        return None
+        valid_modes = ("DC", "AC", "GND", "DCREJ")
 
-    def get_channel_coupling(self, channel):
+        coupling = str(coupling).upper()
+        if coupling not in valid_modes:
+            raise ValueError(f"Invalid Coupling option: {coupling}. "
+                             f"Suuport options are: {valid_modes}")
+
+        self.instrument.write(f"CH{int(channel)}:COUP {coupling}")
+
+    def get_channel_coupling(self, channel: int) -> str:
         """
         get_channel_coupling(channel)
 
-        channel: int, channel number of channel
-                    valid options are 1,2,3, and 4
+        Retirives the coupling used on a the specified channel. For this
+        oscilloscope the following coupling options are supported: "DC", "AC",
+        "GND", and "DC REJ"
 
-        returns:
-        coupling: (str) coupling mode, valid options are "DC", "AC", "GND",
-                    and "DC REJ". (not case-sensitive)
+        Args:
+            channel (int): channel number to query
 
-        gets the coupling used on a the specified channel.
+        Returns:
+            str: coupling mode
         """
 
-        resp = self.instrument.query(f"CH{channel}:COUP?")
+        resp = self.instrument.query(f"CH{int(channel)}:COUP?")
         return resp.strip()
 
-    def set_trigger_acquire_state(self, state):
+    def set_trigger_acquire_state(self, state: bool) -> None:
         """
         set_trigger_acquire_state(state)
 
-        state: (int) acquire state, valid arguements are 0 (stop) and
-                1 (run/acquire)
-
         sets the state of the oscilloscopes acquision mode, whether its
-        currently acquiring new data (run / 1) or not (stop / 0).
+        currently acquiring new data.
+
+        Args:
+            state (bool): acquisition state, valid arguements are False (stop)
+                and True (run/acquire)
         """
 
-        self.instrument.write(f"ACQ:STATE {state}")
-        return None
+        self.instrument.write(f"ACQ:STATE {1 if state else 0}")
 
-    def get_trigger_acquire_state(self):
+    def get_trigger_acquire_state(self) -> bool:
         """
         get_trigger_acquire_state()
 
-        returns:
-        state: (int) acquire state, valid arguements are 0 (stop) and
-                1 (run/acquire)
+        Gets the state of the oscilloscopes acquision mode/whether its
+        currently acquiring new data.
 
-        gets the state of the oscilloscopes acquision mode, whether its
-        currently acquiring new data (run / 1) or not (stop / 0).
+        Returns:
+            bool: Acquisition state, valid arguements are False (stop) and
+                True (run/acquire)
         """
 
-        resp = self.instrument.query("ACQ:STATE?")
-        return int(resp)
+        response = self.instrument.query("ACQ:STATE?")
+        return bool(response)
 
-    def trigger_run(self):
+    def trigger_run(self) -> None:
         """
         trigger_run()
 
         sets the state of the oscilloscopes acquision mode to acquire new
-        data. equivalent to set_trigger_acquire_state(1).
+        data. equivalent to set_trigger_acquire_state(True).
         """
 
-        self.set_trigger_acquire_state(1)
-        return None
+        self.set_trigger_acquire_state(True)
 
-    def trigger_stop(self):
+    def trigger_stop(self) -> None:
         """
         trigger_stop()
 
@@ -426,9 +422,8 @@ class Tektronix_MSO5xxx(_Scpi_Instrument):
         acquiring new data. equivalent to set_trigger_acquire_state(0).
         """
         self.set_trigger_acquire_state(0)
-        return None
 
-    def trigger_force(self):
+    def trigger_force(self) -> None:
         """
         trigger_force()
 
@@ -436,9 +431,8 @@ class Tektronix_MSO5xxx(_Scpi_Instrument):
         """
 
         self.instrument.write("TRIG FORC")
-        return None
 
-    def trigger_single(self):
+    def trigger_single(self) -> None:
         """
         trigger_single()
 
@@ -447,156 +441,159 @@ class Tektronix_MSO5xxx(_Scpi_Instrument):
 
         self.set_trigger_acquire_state(1)
         self.instrument.write("ACQ:STOPA SEQ")
-        return None
 
-    def set_trigger_source(self, channel):
+    def set_trigger_source(self, channel: int) -> None:
         """
         set_trigger_source(channel)
 
-        channel: int, channel number of channel
-                    valid options are 1,2,3, and 4
+        Sets the trigger source to the indicated source channel
 
-        sets the trigger source to the indicated channel number
+        Args:
+            channel (int): channel number to configure
         """
 
-        self.instrument.write(f'TRIGger:A:EDGE:SOUrce CH{channel}')
-        return None
+        self.instrument.write(f'TRIGger:A:EDGE:SOUrce CH{int(channel)}')
 
-    def get_trigger_source(self):
+    def get_trigger_source(self) -> int:
         """
         get_trigger_source()
 
+        Gets the channel number for the trigger source
 
-        returns:
-        channel: int, channel number of channel
-                    valid options are 1,2,3, and 4
-
-        gets the channel number for the trigger source
+        Returns:
+            int: channel number used for the trigger source
         """
 
-        resp = self.instrument.query('TRIGger:A:EDGE:SOUrce?')
-        channel = int(resp.replace('CH', ''))
-        return channel
+        response = self.instrument.query('TRIGger:A:EDGE:SOUrce?')
+        return int(response.replace('CH', ''))
 
-    def set_trigger_position(self, percent):
+    def set_trigger_position(self, offset: float) -> None:
         """
-        set_trigger_position(percent)
+        set_trigger_position(offset)
 
-        percent: (int) percent of the horizontal capture window valid
-                    values are between 0-100
+        Sets the horizontal position of the trigger point which represents the
+        t=0 point of the data capture.
 
-        Sets the horizontal position of the trigger point as a percentage
-        of the capture window.
+        Args:
+            offset (float): Horizontal position of the trigger as a percentage
+                of the horizontal capture window. Should be between 0-100.
         """
 
-        self.instrument.write(f"HOR:POS {percent}")
-        return None
+        if not (0 <= float(offset) <= 100):
+            raise ValueError('offset out of the valid range [0-100]')
 
-    def get_trigger_position(self):
+        self.instrument.write(f"HOR:POS {float(offset)}")
+
+    def get_trigger_position(self) -> float:
         """
         get_trigger_position()
 
-        returns:
-        percent: (int) percent of the horizontal capture window valid
-                    values are between 0-100
+        Retrieves the horizontal position of the trigger point which represents
+        the t=0 point of the data capture.
 
-        gets the horizontal position of the trigger point as a percentage
-        of the capture window.
+        Returns:
+            float: Horizontal position of the trigger as a percentage of the
+                horizontal capture window.
         """
 
         return float(self.instrument.query("HOR:POS?"))
 
-    def set_trigger_slope(self, slope):
+    def set_trigger_slope(self, slope: str) -> None:
         """
         set_trigger_slope(slope)
 
-        slope: str, trigger edge polarity. Valid options are 'rise', 'fall', or
-        'either'
+        Sets the edge polarity of the acquistion trigger. Valid options for
+        this oscilloscope are 'rise', 'fall', or 'either'.
 
-        sets the edge polarity of the acquistion trigger
+        Args:
+            slope (str): trigger edge polarity.
         """
 
-        slope = slope.upper()
-        self.instrument.write(f'TRIGger:A:EDGE:SLOpe {slope}')
-        return None
+        valid_options = ('RISE', 'FALL', 'EITHER')
 
-    def get_trigger_slope(self):
+        slope = str(slope).upper()
+        if slope not in valid_options:
+            raise ValueError('Invalid option for Arg "slope".'
+                             f' Valid option are {valid_options}')
+
+        self.instrument.write(f'TRIGger:A:EDGE:SLOpe {slope}')
+
+    def get_trigger_slope(self) -> str:
         """
         get_trigger_slope()
 
-        returns:
-        slope: str, trigger edge polarity. Valid options are 'rise', 'fall', or
-        'either'
+        Retrives the edge polarity of the acquistion trigger. Valid options for
+        this oscilloscope are 'rise', 'fall', or 'either'.
 
-        gets the edge polarity of the acquistion trigger
+        Returns:
+            str: trigger edge polarity.
         """
 
-        resp = self.instrument.query('TRIGger:A:EDGE:SLOpe?')
-        slope = resp.rstrip('\n').lower()
+        response = self.instrument.query('TRIGger:A:EDGE:SLOpe?')
+        return response.rstrip('\n').lower()
 
-        return slope
-
-    def set_trigger_mode(self, mode):
+    def set_trigger_mode(self, mode: str) -> None:
         """
         set_trigger_mode(mode)
 
-        mode: (str) trigger mode. Valid modes are "AUTO" and "NORM"
+        Sets the mode of the trigger used for data acquisition. In the "AUTO"
+        mode the scope will periodically trigger automatically to update the
+        waveform buffers. In the "NORM" mode the trigger needs to be actively
+        asserted by some control signal for this to occur.
 
-        sets the mode of the trigger in the oscilloscopes acquisition. In
-        the AUTO mode the scope will periodically automatically trigger and
-        the waveform buffers will update. In the NORM mode the trigger
-        needs to be actively asserted for this to take place.
+        Args:
+            mode (str): trigger mode. Valid modes are "AUTO" and "NORM"
         """
 
-        mode = mode.upper()
+        mode = str(mode).upper()
         if mode not in ["AUTO", "NORM", "NORMAL"]:
             raise ValueError(f"Invalid mode: {mode}")
         self.instrument.write(f"TRIG:A:MOD {mode}")
-        return None
 
-    def get_trigger_mode(self):
+    def get_trigger_mode(self) -> str:
         """
         get_trigger_mode()
 
-        returns:
-        mode: (str) trigger mode. Valid modes are "AUTO" and "NORM"
+        Gets the mode of the trigger used for data acquisition. In the "AUTO"
+        mode the scope will periodically trigger automatically to update the
+        waveform buffers. In the "NORM" mode the trigger needs to be actively
+        asserted by some control signal for this to occur.
 
-        Gets the mode of the trigger in the oscilloscopes acquisition. In
-        the AUTO mode the scope will periodically automatically trigger and
-        the waveform buffers will update. In the NORM mode the trigger
-        needs to be actively asserted for this to take place.
+        Returns:
+            str: trigger mode. Valid modes are "AUTO" and "NORM"
         """
 
         response = self.instrument.query("TRIG:A:MOD?")
-        return response.rstrip("\n")
+        return response.rstrip("\n").lower()
 
-    def set_trigger_level(self, level):
+    def set_trigger_level(self, level: float) -> None:
         """
         set_trigger_level(level)
 
-        level: (float) vertical position of the trigger, units depend on
-                the signal being triggered on.
-
-        Sets the vertical position of the trigger point in the units of the
+        Sets the vertical position of the trigger level in the units of the
         triggering waveform
+
+        Args:
+            level (float): vertical position of the trigger, units depend on
+                the signal being triggered on.
         """
 
-        self.instrument.write(f"TRIG:A:LEV {level}")
-        return None
+        self.instrument.write(f"TRIG:A:LEV {float(level)}")
 
-    def get_trigger_level(self):
+    def get_trigger_level(self) -> float:
         """
         get_trigger_level()
 
-        returns
-        level: (float) vertical position of the trigger, units depend on
-                the signal being triggered on.
-
-        Gets the vertical position of the trigger point in the units of the
+        Returns the vertical position of the trigger level in the units of the
         triggering waveform
+
+        Returns:
+            float: vertical position of the trigger, units depend on the signal
+                being triggered on.
         """
 
-        return float(self.instrument.query("TRIG:A:LEV?"))
+        response = self.instrument.query("TRIG:A:LEV?")
+        return float(response)
 
     def set_measure_method(self, method):
         """
@@ -626,7 +623,7 @@ class Tektronix_MSO5xxx(_Scpi_Instrument):
         Gets the method used to calculate the 0% and 100% reference levels.
         """
 
-        resp = self.instrument.query(f'MEASU:METH?')
+        resp = self.instrument.query('MEASU:METH?')
         return resp.strip('\n')
 
     def set_measure_reference_method(self, method):
@@ -719,29 +716,29 @@ class Tektronix_MSO5xxx(_Scpi_Instrument):
 
     def set_measure_config(self, channel, meas_type, meas_idx):
         """
-            set_measure_config(channel, meas_type, meas_idx)
+        set_measure_config(channel, meas_type, meas_idx)
 
-            channel: (int) channel to provide the source of the measurement
-                        Should be 1-4.
-            meas_type: (str) the type of measurement to perform.
+        channel: (int) channel to provide the source of the measurement
+                    Should be 1-4.
+        meas_type: (str) the type of measurement to perform.
 
-            meas_idx: (int) measurement number to assign to the
-                        measurement described by the above parameters.
-                        Can be 1-8.
+        meas_idx: (int) measurement number to assign to the
+                    measurement described by the above parameters.
+                    Can be 1-8.
 
-            valid measurements are:
-            AMPLITUDE, AREA, BURST, CAREA, CMEAN, CRMS, DELAY, FALL,
-            FREQUENCY, HIGH, HITS, LOW, MAXIMUM, MEAN, MEDIAN, MINIMUM,
-            NDUTY, NOVERSHOOT, NWIDTH, PDUTY, PEAKHITS, PERIOD, PHASE,
-            PK2PK, POVERSHOOT, PTOP, PWIDTH, QFACTOR, RISE, RMS, SIGMA1,
-            SIGMA2, SIGMA3, SNRATIO, STDDEV, UNDEFINED
+        valid measurements are:
+        AMPLITUDE, AREA, BURST, CAREA, CMEAN, CRMS, DELAY, FALL,
+        FREQUENCY, HIGH, HITS, LOW, MAXIMUM, MEAN, MEDIAN, MINIMUM,
+        NDUTY, NOVERSHOOT, NWIDTH, PDUTY, PEAKHITS, PERIOD, PHASE,
+        PK2PK, POVERSHOOT, PTOP, PWIDTH, QFACTOR, RISE, RMS, SIGMA1,
+        SIGMA2, SIGMA3, SNRATIO, STDDEV, UNDEFINED
 
-            Arguement is not case-sensitive
+        Arguement is not case-sensitive
 
-            Sets up a measurement on the desired channel.
+        Sets up a measurement on the desired channel.
         """
 
-        measurement_types = ['AMPLITUDE', 'AREA', 'BURST', 'CAREA',
+        measurement_types = ('AMPLITUDE', 'AREA', 'BURST', 'CAREA',
                              'CMEAN', 'CRMS', 'DELAY', 'DISTDUTY',
                              'EXTINCTDB', 'EXTINCTPCT', 'EXTINCTRATIO',
                              'EYEHEIGHT', 'EYEWIDTH', 'FALL', 'FREQUENCY',
@@ -753,7 +750,7 @@ class Tektronix_MSO5xxx(_Scpi_Instrument):
                              'POVERSHOOT', 'PTOP', 'PWIDTH', 'QFACTOR',
                              'RISE', 'RMS', 'RMSJITTER', 'RMSNOISE',
                              'SIGMA1', 'SIGMA2', 'SIGMA3', 'SIXSIGMAJIT',
-                             'SNRATIO', 'STDDEV', 'UNDEFINED', 'WAVEFORMS']
+                             'SNRATIO', 'STDDEV', 'UNDEFINED', 'WAVEFORMS')
 
         meas_type = meas_type.upper()
         if meas_type not in measurement_types:
@@ -806,18 +803,37 @@ class Tektronix_MSO5xxx(_Scpi_Instrument):
         self.instrument.write(f'MEASU:MEAS{meas_idx}:TYP UNDEFINED')
         return None
 
-    def get_measure_data(self, meas_idx):
+    def get_measure_data(self, *meas_idx: int) -> Union[float, tuple]:
         """
-        get_measure_data(meas_idx)
+        get_measure_data(*meas_idx)
 
-        meas_idx: (int) measurement number to assign to the measurement
-                    described by the above parameters. Can be 1-8.
+        Returns the current value of the requesed measurement(s) reference by
+        the provided index(s).
 
-        Returns the value of the measurement 'meas_idx' as a float.
+        Args:
+            meas_idx (int): measurement index(s) for the measurement(s) to
+                query. Can be a signal index or an arbitrary sequence of
+                indices.
+
+        Returns:
+            float: Current value of the requested measurement. If no value as
+                been assigned to the measurement yet the returned value is nan.
         """
 
-        resp = self.instrument.query(f'MEASU:MEAS{meas_idx}:VAL?')
-        return float(resp)
+        data = []
+        for idx in meas_idx:
+
+            query_cmd = f"MEASU:MEAS{int(idx)}:VAL?"
+            response = self.instrument.query(query_cmd)
+
+            try:
+                data.append(float(response))
+            except ValueError:
+                data.append(float('nan'))
+
+        if len(data) == 1:
+            return data[0]
+        return tuple(data)
 
     def get_measure_statistics(self, meas_idx):
         """
@@ -882,91 +898,110 @@ class Tektronix_MSO5xxx(_Scpi_Instrument):
         self.instrument.write('MEASU:STATI:MODE OFF')
         return None
 
-    def get_image(self, image_title):
+    def get_image(self, image_title: Union[str, Path], **kwargs) -> None:
         """
-        This scope does not have a function to directly stream the image data
-        from the screen buffer to a remote connection, however there are
-        commands to save to internal memory and transfer saved files over the
-        remote connection. This function saves the scope image to a temporary
-        file on the scope, transfers the file over the remote connection, then
-        deletes the copy in the scopes internal memory.
+        get_image(image_title, **kwargs)
 
-        automatically adds .png to the end of image_title
+        Saves current oscillocope image to file at the path specified by
+        "image_title". The Image will be saved as .png. If no path information
+        is included in "image_title" the image will be saved in the current
+        execution directory.
+
+        Args:
+            image_title (Union[str, Path]): path name of image, file extension
+                will be added automatically
+        Kwargs:
+            save_to_device (bool): Determines which computer the image is
+                stored on. If True "image_title" is assumed to be a path on the
+                oscilloscope itself and the image will be stroed there.
+                Otherwise if False the image is transfered to the remote
+                machine and it is stored there at "image_title".
+                Defaults to False.
         """
 
-        image_buffer_path = r'C:\TekScope\Screen Captures\temp.png'
+        # add file extension
+        if isinstance(image_title, Path):
+            file_path = image_title.parent.joinpath(image_title.name + '.png')
+        elif isinstance(image_title, str):
+            file_path = f"{image_title}.png"
+        else:
+            raise ValueError('image_title must be a str or path-like object')
 
-        self.instrument.write(f'HARDCopy:FILEName "{image_buffer_path}"')
-        self.instrument.write('HARDCopy STARt')
+        if kwargs.get('save_to_device', False):
+            # save to location on scope
+            self.instrument.write(f'HARDCopy:FILEName "{file_path}"')
+            self.instrument.write('HARDCopy STARt')
+        else:
 
-        # SAVE:IMAGE is an OPC generating command. Wait for instrument to
-        # finish writing the screenshot to disk by querying *OPC?
-        self.instrument.write('*OPC?')
+            # save to temp location on scope
+            buffer_path = r'C:\TekScope\Screen Captures\temp.png'
 
-        self.instrument.write(f'FILESystem:READFile "{image_buffer_path}"')
+            self.instrument.write(f'HARDCopy:FILEName "{buffer_path}"')
+            self.instrument.write('HARDCopy STARt')
+            self.instrument.write('*OPC?')  # done yet?
 
-        # Read back the data sent from the instrument and write the data
-        # (un-altered) it to a .png file on your local system.
-        raw_data = self.instrument.read_raw()
+            # transfer file to computer
+            self.instrument.write(f'FILESystem:READFile "{buffer_path}"')
+            raw_data = self.instrument.read_raw()
 
-        fid = open(f"{image_title}.png", 'wb')
-        fid.write(raw_data)
-        fid.close()
+            # save image
+            with open(file_path, 'wb') as file:
+                file.write(raw_data)
 
-        self.instrument.write(f'FILESystem:DELEte "{image_buffer_path}"')
-        return None
-
-    def set_record_length(self, length):
+    def set_record_length(self, length: int) -> None:
         """
         set_record_length(length)
 
-        length: int, number of points to capture in the waveform buffer per
-                scope trigger
-
-        changes the length of the waveform buffer to the value specified by
+        Changes the length of the waveform buffer to the value specified by
         'length'. Note: different scopes have different possible record length
         options, if the value specified in this function isn't availible on the
         scope connected round to the nearest availible setting.
+
+        Args:
+            length (int): number of points to capture in the waveform buffer
+                per scope trigger
         """
 
-        self.instrument.write(f"HOR:RECO {length}")
-        return None
+        self.instrument.write(f"HOR:RECO {int(length)}")
 
-    def get_record_length(self):
+    def get_record_length(self) -> int:
         """
         get_record_length()
 
         retrives the current length of the waveform buffer.
 
-        returns: float
+        Returns:
+            int: len of the waveform buffer
         """
 
-        return float(self.instrument.query("HOR:RECO?"))
+        return int(self.instrument.query("HOR:RECO?"))
 
-    def set_horizontal_scale(self, scale):
+    def set_horizontal_scale(self, scale: float) -> None:
         """
         set_horizontal_scale(scale)
 
-        scale: int/float, time scale across one horizontal division on the
-               display in seconds.
-
         sets the scale of horizontal divisons (for all channels) to the
         specified value in seconds.
+
+        Args:
+            scale (float): time scale across one horizontal division on the
+                display in seconds.
         """
 
-        self.instrument.write(f"HOR:SCA {scale}")
-        return None
+        self.instrument.write(f'HOR:SCA {float(scale)}')
 
-    def get_horizontal_scale(self):
+    def get_horizontal_scale(self) -> float:
         """
         get_horizontal_scale()
 
-        retrieves the scale of horizontal divisons in seconds.
+        Retrieves the horizontal scale used to accquire waveform data.
 
-        returns: float
+        Returns:
+            float: horizontal scale in seconds per division.
         """
 
-        return float(self.instrument.query("HOR:SCA?"))
+        response = self.instrument.query('HOR:SCA?')
+        return float(response)
 
     def set_horizontal_roll_mode(self, mode):
         """
