@@ -6,17 +6,7 @@ from pathlib import Path
 
 
 # Globals
-rm = None
-
-
-def init(visa_libary=""):
-    """Intialize resource manager optionally tied to the specified library
-
-    Args:
-        visa_libary (str, optional): Visa library string to use e.g. "@py", "@IVI"
-    """
-    global rm
-    rm = pyvisa.ResourceManager(visa_libary)
+rm = pyvisa.ResourceManager()
 
 
 # Utility Functions
@@ -24,8 +14,6 @@ def get_devices_addresses():
     """
     returns a list of the addresses of peripherals connected to the computer
     """
-    if rm is None:
-        init()
     return rm.list_resources()
 
 
@@ -46,8 +34,6 @@ def identify_devices(verbose=False):
          ...
          (address_n, idn_response_n))
     """
-    if rm is None:
-        init()
     scpi_devices = []
     for address in rm.list_resources():
         try:
@@ -73,8 +59,6 @@ def identify_devices(verbose=False):
 class Scpi_Instrument():
 
     def __init__(self, address, **kwargs):
-        if rm is None:
-            init()
         self.address = address
         self.instrument = rm.open_resource(self.address)
         self.timeout = kwargs.get('timeout', 1000)
