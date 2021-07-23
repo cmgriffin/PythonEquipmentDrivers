@@ -86,9 +86,9 @@ class Fluke_45(Scpi_Instrument):
                 logger.error(f'{self} response to command was {resp}')
         return ret
 
-    def _measure_signal(self):
+    def fetch_data(self):
         """
-        _measure_signal()
+        _fetch_data()
 
         returns the value of the current measurement selected on the
         multimeter display
@@ -225,7 +225,7 @@ class Fluke_45(Scpi_Instrument):
         if self.get_mode() != 'VDC':
             raise IOError("Multimeter is not configured to measure voltage")
         else:
-            return self._measure_signal()
+            return self.fetch_data()
 
     def measure_voltage_rms(self):
         """
@@ -242,7 +242,7 @@ class Fluke_45(Scpi_Instrument):
         if self.get_mode() != 'VAC':
             raise IOError("Multimeter is not configured to measure AC voltage")
         else:
-            return self._measure_signal()
+            return self.fetch_data()
 
     def measure_current(self):
         """
@@ -259,7 +259,7 @@ class Fluke_45(Scpi_Instrument):
         if self.get_mode() != 'ADC':
             raise IOError("Multimeter is not configured to measure current")
         else:
-            return self._measure_signal()
+            return self.fetch_data()
 
     def measure_current_rms(self):
         """
@@ -276,7 +276,7 @@ class Fluke_45(Scpi_Instrument):
         if self.get_mode() != 'AAC':
             raise IOError("Multimeter is not configured to measure AC current")
         else:
-            return self._measure_signal()
+            return self.fetch_data()
 
     def measure_resistance(self):
         """
@@ -293,7 +293,7 @@ class Fluke_45(Scpi_Instrument):
         if self.get_mode() != 'OHMS':
             raise IOError("Multimeter is not configured to measure resistance")
         else:
-            return self._measure_signal()
+            return self.fetch_data()
 
     def measure_frequency(self):
         """
@@ -310,15 +310,7 @@ class Fluke_45(Scpi_Instrument):
         if self.get_mode() != 'FREQ':
             raise IOError("Multimeter is not configured to measure frequency")
         else:
-            return self._measure_signal()
-
-    def fetch_measurement(self):
-        """
-        fetch_measurement()
-
-        Fetch the measurement after a bus trigger
-        """
-        return self._measure_signal()
+            return self.fetch_data()
 
     def set_trigger_source(self, source):
         """
@@ -331,7 +323,15 @@ class Fluke_45(Scpi_Instrument):
         trigger_type_num = 2 if 'ext' in source.lower() else 1
         self.send_raw_scpi(f"TRIGGER {trigger_type_num}")
 
-    def set_mode_adv(self, mode, range_n, rate):
+    def trigger(self):
+        """
+        trigger()
+
+        Send the trigger commmand
+        """
+        self.instrument.write('*TRG')
+
+    def config(self, mode, range_n, rate):
         """
         set_mode_adv(mode, range_n, rate)
 
