@@ -1,7 +1,8 @@
-from .HP_34401A import HP_34401A as _HP_34401A
+import warnings
+from .HP_34401A import HP_34401A
 
 
-class Fluke_8845A(_HP_34401A):
+class Fluke_8845A(HP_34401A):
     """
     Fluke_8845A(address, factor=1)
 
@@ -26,60 +27,3 @@ class Fluke_8845A(_HP_34401A):
         Disable the Fluke 45 command set emulation mode
         """
         self.instrument.write("L1")
-
-    def arm_trigger(self):
-        """
-        arm_trigger()
-
-        Arm the meter trigger function
-        """
-        self.instrument.write("INIT")
-
-    def fetch_measurement(self):
-        """
-        fetch_measurement()
-
-        Fetch the measurement after a bus trigger
-        """
-        response = self.instrument.query("FETC?")
-        return self.factor*float(response)
-
-    def set_trigger_source(self, source):
-        """
-        set_trigger_source(source)
-
-        Configure the meter trigger source
-
-        source (str): { BUS | IMMediate | EXTernal }
-        """
-        self.instrument.write(f"TRIG:SOURCE {source.strip()}")
-
-    def set_mode_adv(self, mode, range_, nplc):
-        """
-        set_mode_adv(mode, range_, nplc)
-
-        Access more detailed meter configuration options
-
-        Args:
-            mode (str): type of measurement to be done
-                valid modes are: 'VDC', 'VAC', 'ADC', 'AAC', 'FREQ', 'OHMS',
-                                 'DIOD', 'CONT', 'PER'
-                which correspond to DC voltage, AC voltage, DC current, AC current,
-                frequency, resistence, diode voltage, continuity, and period
-                respectively (not case sensitive)
-
-            range_ (float): Maximum expected measurement value, the meter 
-                will choose from available ranges accordingly
-            nplc (float): Set the meter's integration time based on the number
-                of power line cycles (0.02, 0.2, 1, 10, and 100)
-
-        Raises:
-            ValueError: [description]
-        """
-        mode = mode.upper()
-        if mode in self.valid_modes:
-            self.instrument.write(
-                f"CONF:{self.valid_modes[mode]} {range_}")
-        else:
-            raise ValueError("Invalid mode option")
-        self.instrument.write(f"VOLT:DC:NPLC {nplc}")
