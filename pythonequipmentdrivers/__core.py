@@ -3,7 +3,7 @@ from pyvisa import VisaIOError
 from importlib import import_module
 import json
 from pathlib import Path
-
+from types import SimpleNamespace
 
 # Globals
 rm = pyvisa.ResourceManager()
@@ -282,6 +282,64 @@ class Gpib_Interface():
         return None
 
 
+class Dmms(SimpleNamespace):
+    """
+    A slightly modified subclass of SimpleNamespace to act as a container for 
+    multimeters in the enviroment and support some common methods. 
+
+    """
+
+    def __repr__(self) -> str:
+        return (
+            super().__repr__().replace("namespace", self.__class__.__name__)
+        )
+
+    def __iter__(self):
+        return iter(self.__dict__.items())
+
+    def fetch_data(self, mapper=None):
+        """
+        fetch_data([mapper])
+
+        Fetch measurements from all DMMs and pack them into a dict. The keys 
+        will be the DMM name by default. Optionally, a mapper can be specified
+        to rename the dictonary keys.
+        Args:
+            mapper (dict, optional): rename keys of the collected data. Key
+            should be the DMM name and the value should be the desired new name.
+
+        Returns:
+            dict: dict of the fetched measurements
+        """
+        mapper = {} if mapper is None else mapper
+        measurements = {}
+        for name, inst in self:
+            new_name = mapper.get(name, name)
+            measurements[new_name] = inst.fetch_data()
+        return measurements
+
+    def init(self):
+        """
+        init()
+
+        Initialize (arm) the trigger of dmms where applicable.
+        """
+        for _, inst in self:
+            try:
+                inst.init()
+            except TypeError:
+                pass
+
+    def reset(self):
+        """
+        reset()
+
+        Reset all dmms
+        """
+        for _, inst in self:
+            inst.rst()
+
+
 class EnvironmentSetup():
     """
     Class for handling the instantiation of generic sets of test equipment
@@ -472,8 +530,7 @@ class EnvironmentSetup():
                     raise ConnectionError(f"Failed connection: {device_name}")
         # only create the instance attribute if it is not empty
         if dmms:
-            self.dmms = dmms
-        return None
+            self.dmms = Dmms(**dmms)
 
 
 def get_callable_methods(instance):
