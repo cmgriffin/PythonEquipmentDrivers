@@ -128,7 +128,9 @@ class Fluke_45(Scpi_Instrument):
         """
         self.send_raw_scpi("L2")
 
-    def _get_range_number(self, mode, rate, value):
+    def _get_range_number(self, value, reverse_lookup=False):
+        mode = self.get_mode()
+        rate = self.get_rate()
         for valid_modes, rates in self.ranges:
             if mode not in valid_modes:
                 continue
@@ -136,8 +138,10 @@ class Fluke_45(Scpi_Instrument):
                 if rate not in valid_rates:
                     continue
                 for range_, command in max_values:
-                    if value < range_:
+                    if value < range_ and not reverse_lookup:
                         return command
+                    elif command == value and reverse_lookup:
+                        return range_
                 raise ValueError(f"{value=} is greater than highest range")
 
     def set_range(self, max_value, n=None, auto_range=False):
@@ -160,8 +164,7 @@ class Fluke_45(Scpi_Instrument):
         if auto_range:
             self.send_raw_scpi("AUTO")
         elif n is None:
-            n = self._get_range_number(
-                self.get_mode(), self.get_rate(), max_value)
+            n = self._get_range_number(max_value)
         if n in range(0, 7):
             self.send_raw_scpi(f"RANGE {n}")
         else:
@@ -178,8 +181,8 @@ class Fluke_45(Scpi_Instrument):
         returns: int
         """
 
-        response = self.query_raw_scpi("RANGE1?")
-        return int(response)
+        n = int(self.query_raw_scpi("RANGE1?"))
+        return self._get_range_number(n, reverse_lookup=True)
 
     def set_rate(self, rate):
         """
