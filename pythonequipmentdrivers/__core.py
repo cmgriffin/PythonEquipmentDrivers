@@ -64,7 +64,6 @@ class Scpi_Instrument():
         self.address = address
         self.instrument = self.open_instrument(address)
         self.timeout = kwargs.get('timeout', 1000)
-        return None
 
     def open_instrument(self, address):
         """
@@ -94,6 +93,56 @@ class Scpi_Instrument():
         type(self)._serial_instruments.append((address_short, instrument))
         return instrument
 
+    def write(self, write_str, **kwargs):
+        """
+        write(write_str, **kwargs)
+
+        Pass-through function which forwards the contents of 'write_str' to
+        the device. 
+
+        The is to allow subclass modifications where further processing might
+        need to to performed
+
+        Args:
+            write_str: string, scpi query to be passed through to the device.
+            **kwargs: passed to pyvisa.resource respective method
+
+        """
+        return self.instrument.write(write_str, **kwargs)
+
+    def read(self, **kwargs):
+        """
+        read(**kwargs)
+
+        Pass-through function which reads the device, returning the response
+        without any processing.
+
+        The is to allow subclass modifications where further processing might
+        need to to performed
+
+        Args:
+            **kwargs: passed to pyvisa.resource respective method
+
+        """
+        return self.instrument.read(**kwargs)
+
+    def query(self, query_str, **kwargs):
+        """
+        query(query_str, **kwargs)
+
+        Pass-through function which forwards the contents of 'query_str' to
+        the device and returns the response without further processing.
+
+        The is to allow subclass modifications where further processing might
+        need to to performed
+
+        Args:
+            write_str: string, scpi query to be passed through to the device.
+            **kwargs: passed to pyvisa.resource respective method
+
+        """
+        return self.instrument.query(query_str, **kwargs)
+
     @property
     def idn(self):
         """
@@ -108,7 +157,7 @@ class Scpi_Instrument():
         Returns:
             str: uniquely identifies the instrument
         """
-        return self.query_raw_scpi('*IDN?')
+        return self.query('*IDN?')
 
     def cls(self, **kwargs) -> None:
         """
@@ -126,7 +175,7 @@ class Scpi_Instrument():
             None
         """
 
-        self.instrument.write('*CLS', **kwargs)
+        self.write('*CLS', **kwargs)
 
     def rst(self, **kwargs) -> None:
         """
@@ -139,7 +188,7 @@ class Scpi_Instrument():
         Commands and should be supported by all SCPI compatible instruments.
         """
 
-        self.instrument.write('*RST', **kwargs)
+        self.write('*RST', **kwargs)
 
     @property
     def timeout(self):
@@ -227,7 +276,7 @@ class Scpi_Instrument():
             None
         """
 
-        self.instrument.write(command_str, **kwargs)
+        self.write(command_str, **kwargs)
 
     def query_raw_scpi(self, query_str: str, **kwargs) -> str:
         """
@@ -243,7 +292,7 @@ class Scpi_Instrument():
 
         """
 
-        return self.instrument.query(query_str, **kwargs)
+        return self.query(query_str, **kwargs)
 
     def read_raw_scpi(self, **kwargs) -> str:
         """
@@ -255,7 +304,7 @@ class Scpi_Instrument():
         Only to be used for read.
         """
 
-        return self.instrument.read(**kwargs)
+        return self.read(**kwargs)
 
 
 class Gpib_Interface():
@@ -269,7 +318,6 @@ class Gpib_Interface():
     def __init__(self, address, **kwargs) -> None:
         self.address = address
         self.instrument = rm.open_resource(self.address)
-        return None
 
     def group_execute_trigger(self, *trigger_devices):
         """
@@ -279,7 +327,6 @@ class Gpib_Interface():
         """
         visa_handles = [n.instrument for n in trigger_devices]
         self.instrument.group_execute_trigger(*visa_handles)
-        return None
 
 
 class Dmms(SimpleNamespace):
@@ -456,7 +503,6 @@ class EnvironmentSetup():
 
         self.__make_connections(init_devices=init_devices,
                                 verbose=kwargs.get('verbose', True))
-        return None
 
     def __make_connections(self, init_devices=False, verbose=True):
         """
@@ -587,8 +633,6 @@ def initiaize_device(inst, initialization_sequence):
                 # getattr(inst, cmd)(**initialization_sequence[cmd])
             except TypeError as error:  # invalid kwargs
                 print(f"\tError with initialization command\t{error}")
-
-    return None
 
 
 # Custom Exception
