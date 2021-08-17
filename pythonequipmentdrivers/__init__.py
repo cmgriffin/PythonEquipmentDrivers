@@ -1,6 +1,6 @@
 from .__core import (get_devices_addresses, identify_devices, Scpi_Instrument,
                      VisaIOError, EnvironmentSetup,
-                     initiaize_device)
+                     initiaize_device, Gpib_Interface)
 
 
 from . import source
