@@ -19,17 +19,17 @@ class Keithley_2231A(Scpi_Instrument):
         self.set_access_remote('remote')
         return None
 
-    def __del__(self):
-        try:
-            # if connection has been estabilished terminate it
-            if hasattr(self, 'instrument'):
-                self.set_access_remote('local')
-                self.instrument.close()
-        except VisaIOError:
-            # if connection not connection has been estabilished (such as if an
-            # error is throw in __init__) do nothing
-            pass
-        return None
+    # def __del__(self):
+    #     try:
+    #         # if connection has been estabilished terminate it
+    #         if hasattr(self, 'instrument'):
+    #             self.set_access_remote('local')
+    #             self.instrument.close()
+    #     except VisaIOError:
+    #         # if connection not connection has been estabilished (such as if an
+    #         # error is throw in __init__) do nothing
+    #         pass
+    #     return None
 
     def set_access_remote(self, mode):
         """

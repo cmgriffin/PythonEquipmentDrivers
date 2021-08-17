@@ -312,7 +312,7 @@ class Fluke_45(Scpi_Instrument):
         else:
             return self.fetch_data()
 
-    def set_trigger_source(self, source):
+    def set_trigger_source(self, trigger):
         """
         set_trigger_source(source)
 
@@ -320,7 +320,7 @@ class Fluke_45(Scpi_Instrument):
 
         source (str): { INTernal or EXTernal }
         """
-        trigger_type_num = 2 if 'ext' in source.lower() else 1
+        trigger_type_num = 2 if 'ext' in trigger.lower() else 1
         self.send_raw_scpi(f"TRIGGER {trigger_type_num}")
 
     def trigger(self):

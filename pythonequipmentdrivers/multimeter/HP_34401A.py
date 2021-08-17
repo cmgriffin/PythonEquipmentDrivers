@@ -84,9 +84,9 @@ class HP_34401A(Scpi_Instrument):
         self.measure_time = self.set_measure_time()
         self.trigger_mode = self.get_trigger_source()
 
-    def __del__(self) -> None:
-        self.set_local()
-        super().__del__()
+    # def __del__(self) -> None:
+    #     self.set_local()
+    #     super().__del__()
 
     def set_mode(self, mode: str) -> None:
         """
