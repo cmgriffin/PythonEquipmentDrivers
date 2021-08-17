@@ -445,7 +445,7 @@ class HP_34401A(Scpi_Instrument):
         acdc = str(acdc).upper()
         if not (acdc in valid_acdc):
             raise ValueError("Invalid acdc option")
-        acdc = valid_acdc[acdc] if not usefreq else ''
+        acdc = valid_acdc[acdc] if not (usefreq or ':' in mode) else ''
 
         # if range is not provided, cannot use nplc in CONF command
         signal_range = str(signal_range).upper()
