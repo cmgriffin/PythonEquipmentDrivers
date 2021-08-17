@@ -362,7 +362,7 @@ class HP_34401A(Scpi_Instrument):
             [list, float]: data in meter memory resulting from all scans
         """
         response = self.instrument.query('FETC?', **kwargs)
-        return self.resp_format(response, float)
+        return self.resp_format(response, float, self.factor)
 
     def abort(self, **kwargs) -> None:
         """
@@ -489,7 +489,7 @@ class HP_34401A(Scpi_Instrument):
                 print(cmd_str)
             self.instrument.write(cmd_str, **kwargs)
 
-    def resp_format(self, response, resp_type: type = int):
+    def resp_format(self, response, resp_type: type = int, factor=None):
         """resp_format(response(str data), type(int/float/etc))
 
         Args:
@@ -512,6 +512,8 @@ class HP_34401A(Scpi_Instrument):
         # that it isn't explicitly trying to find the correct character
         try:
             response = list(map(resp_type, response[start+1:stop].split(',')))
+            if factor is not None:
+                response = [factor*val for val in response]
         except ValueError:
             raise
         if len(response) == 1:
