@@ -299,7 +299,7 @@ class Dmms(SimpleNamespace):
         )
 
     def __iter__(self):
-        return iter(self.__dict__.items())
+        return iter(self.__dict__.values())
 
     def fetch_data(self, mapper=None):
         """
@@ -317,7 +317,7 @@ class Dmms(SimpleNamespace):
         """
         mapper = {} if mapper is None else mapper
         measurements = {}
-        for name, inst in self:
+        for name, inst in self.__dict__.items():
             new_name = mapper.get(name, name)
             measurements[new_name] = inst.fetch_data()
         return measurements
@@ -328,10 +328,10 @@ class Dmms(SimpleNamespace):
 
         Initialize (arm) the trigger of dmms where applicable.
         """
-        for _, inst in self:
+        for inst in self:
             try:
                 inst.init()
-            except TypeError:
+            except AttributeError:
                 pass
 
     def reset(self):
@@ -340,7 +340,7 @@ class Dmms(SimpleNamespace):
 
         Reset all dmms
         """
-        for _, inst in self:
+        for inst in self:
             inst.rst()
 
 
@@ -500,7 +500,8 @@ class EnvironmentSetup():
                               **kwargs)
                 vars(self)[device_name] = inst
                 if 'multimeter' in device_info['definition']:
-                    dmms[device_name] = inst
+                    short_name = device_name.replace('DMM', '')
+                    dmms[short_name] = inst
                 if verbose:
                     print(f'[CONNECTED] {device_name}')
 
