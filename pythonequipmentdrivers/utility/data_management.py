@@ -1,6 +1,7 @@
 from pathlib import Path
 from time import strftime
 import json
+from collections.abc import Mapping, Sequence, Iterable
 
 
 def log_data(directory=None, file_name=None, *data, init=False):
@@ -211,6 +212,66 @@ def create_test_log(base_dir, images=False, raw_data=False, **test_info):
                       sort_keys=False)
 
     return test_dir  # return newly created directory
+
+
+def validate_data(datum: Mapping[str, float], validation_checks: Iterable[Sequence]):
+    """
+    Performs checks on measurements in datum defined in validations_checks list
+
+    Example:
+
+    validation_checks = (
+        ("Vout", "vout_set", None, 0.15),
+        ("Iout", "iout_set", 10, 0.05),
+        ("Pvout", None, 63.0, None),
+    )
+    datum = {"vout_set": ..., "iout_set": ...,
+        "Vout": ..., "Iout": ..., "Pvout": ...}
+
+    Vout checked relative to vout_set that error ratio (error/expected) does
+    not exceed 0.15.
+    Iout checked relative to iout_set that error does not exceed 10 and that 
+    error ratio does not excced 0.05
+    Pvout checked that absolute value does not exceed 63.0
+
+    Args:
+        datum (Mapping[str, float]): a dict of labeled measurement values
+        validation_checks (Iterable[Sequence]): An interable of lists
+        describing the check to perform. 
+        fields: (meas_name, expected_name, error_lim, error_ratio_lim)
+            expected name: if None then check will be absolute
+            error_lim: if None then error check is skipped
+            error_ratio_lim: if None then error ratio check is skipped
+
+
+    Returns:
+        True: All checks pass
+        False: Any check fails
+    """
+
+    for meas_name, expected_name, error_lim, error_ratio_lim in validation_checks:
+        meas = datum[meas_name]
+        if (expected_name is None) and (meas > error_lim):
+            # an absolute measurement
+            print(f"{meas_name} is above {error_lim} ({meas=})")
+            return False
+        elif expected_name is not None:
+            # relative measurement
+            expected = datum[expected_name]
+            error = abs(meas - expected)
+            error_ratio = error / expected if expected != 0 else 0
+            if (
+                (error_ratio_lim is not None) and (
+                    error_ratio > error_ratio_lim)
+            ) and ((error_lim is not None) and (error > error_lim)):
+                print(f"{meas_name} error is above {error_lim} ({meas=})")
+                return False
+            elif (error_lim is None) and (error_ratio > error_ratio_lim):
+                print(f"{meas_name} error is above {error_ratio_lim} ({meas=})")
+                return False
+            elif (error_ratio_lim is None) and (error > error_lim):
+                print(f"{meas_name} error is above {error_lim} ({meas=})")
+    return True
 
 
 if __name__ == '__main__':
