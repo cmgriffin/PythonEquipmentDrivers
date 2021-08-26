@@ -301,7 +301,7 @@ class Dmms(SimpleNamespace):
     def __iter__(self):
         return iter(self.__dict__.values())
 
-    def fetch_data(self, mapper=None):
+    def fetch_data(self, mapper=None, only_mapped=False):
         """
         fetch_data([mapper])
 
@@ -318,7 +318,11 @@ class Dmms(SimpleNamespace):
         mapper = {} if mapper is None else mapper
         measurements = {}
         for name, inst in self.__dict__.items():
-            new_name = mapper.get(name, name)
+            new_name = mapper.get(name)
+            if new_name is None and only_mapped:
+                continue
+            elif new_name is None:
+                new_name = name
             measurements[new_name] = inst.fetch_data()
         return measurements
 
