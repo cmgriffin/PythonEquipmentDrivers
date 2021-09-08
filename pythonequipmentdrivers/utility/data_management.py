@@ -2,6 +2,7 @@ from pathlib import Path
 from time import strftime
 import json
 from collections.abc import Mapping, Sequence, Iterable
+import csv
 
 
 def log_data(directory=None, file_name=None, *data, init=False):
@@ -116,9 +117,13 @@ def dump_data(directory, file_name, data):
     """
 
     with open(Path(directory) / f'{file_name}.csv', 'w') as f:
-
-        for item in data:
-            print(*item, sep=',', file=f)
+        if isinstance(data[0], dict):
+            writer = csv.DictWriter(f, fieldnames=data[0].keys())
+            writer.writeheader()
+            writer.writerows(data)
+        else:
+            for item in data:
+                print(*item, sep=',', file=f)
 
     return None
 
