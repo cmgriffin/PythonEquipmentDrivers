@@ -24,6 +24,27 @@ class Fluke_45(Scpi_Instrument):
     http://www.ece.ubc.ca/~eng-services/files/manuals/Man_DMM_fluke45.pdf
     """
 
+    ranges = (
+        ({'VDC', 'VAC'}, (
+            ({'M', 'F'}, ((0.3, 1), (3, 2), (30, 3), (300, 4), (1000, 5))),
+            ({'S'}, ((0.1, 1), (1, 2), (10, 3), (100, 4), (1000, 5)))
+        )),
+        ({'ADC', 'AAC'}, (
+            ({'M', 'F'}, ((0.03, 1), (0.1, 2), (10, 3))),
+            ({'S'}, ((0.01, 1), (0.1, 2), (10, 3)))
+        )),
+        ({'OHM'}, (
+            ({'M', 'F'}, ((300, 1), (3E3, 2), (3E4, 3),
+             (3E5, 4), (3E6, 5), (3E7, 6), (3E8, 7))),
+            ({'S'}, ((100, 1), (1E3, 2), (1E4, 3),
+             (1E5, 4), (1E6, 5), (1E7, 6), (1E8, 7)))
+        )),
+        ({'FREQ'}, (
+            ({'S', 'M', 'F'}, ((1E3, 1), (1E4, 2), (1E5, 3),
+                               (1E6, 4), (1E7, 5))),
+        )),
+    )
+
     def __init__(self, address, **kwargs):
         super().__init__(address, **kwargs)
         self.factor = kwargs.get('factor', 1.0)
@@ -102,12 +123,28 @@ class Fluke_45(Scpi_Instrument):
         """
         enable_cmd_emulation_mode()
 
-        For use with a Fluke 8845A. Enables the Fluke 45 command set emulation 
+        For use with a Fluke 8845A. Enables the Fluke 45 command set emulation
         mode
         """
         self.send_raw_scpi("L2")
 
-    def set_range(self, n, auto_range=False):
+    def _get_range_number(self, value, reverse_lookup=False):
+        mode = self.get_mode()
+        rate = self.get_rate()
+        for valid_modes, rates in self.ranges:
+            if mode not in valid_modes:
+                continue
+            for valid_rates, max_values in rates:
+                if rate not in valid_rates:
+                    continue
+                for range_, command in max_values:
+                    if value < range_ and not reverse_lookup:
+                        return command
+                    elif command == value and reverse_lookup:
+                        return range_
+                raise ValueError(f"{value=} is greater than highest range")
+
+    def set_range(self, signal_range=None, n=None, auto_range=False):
         """
         set_range(n, auto_range=False)
 
@@ -126,12 +163,12 @@ class Fluke_45(Scpi_Instrument):
 
         if auto_range:
             self.send_raw_scpi("AUTO")
+        elif n is None:
+            n = self._get_range_number(signal_range)
         if n in range(0, 7):
             self.send_raw_scpi(f"RANGE {n}")
         else:
             raise ValueError("Invalid range option, should be 1-7")
-
-        return None
 
     def get_range(self):
         """
@@ -144,8 +181,8 @@ class Fluke_45(Scpi_Instrument):
         returns: int
         """
 
-        response = self.query_raw_scpi("RANGE1?")
-        return int(response)
+        n = int(self.query_raw_scpi("RANGE1?"))
+        return self._get_range_number(n, reverse_lookup=True)
 
     def set_rate(self, rate):
         """
@@ -331,7 +368,7 @@ class Fluke_45(Scpi_Instrument):
         """
         self.instrument.write('*TRG')
 
-    def config(self, mode, range_n, rate):
+    def config(self, mode, rate, signal_range=None, range_n=None):
         """
         set_mode_adv(mode, range_n, rate)
 
@@ -343,13 +380,14 @@ class Fluke_45(Scpi_Instrument):
                 which correspond to AC current, DC current, AV voltage, DC voltage,
                 resistence, frequency, and continuity respectively (not case
                 sensitive)
-            range_n (int): Set the current range setting used for measurements.
+            range_n (float, optional): Set the current range setting used for measurements.
                 valid settings are the integers 1 through 7, meaning of the index
                 depends on which measurement is being performed.
+            signal_range (float, optional): measurement range. Defaults to 'auto'
             rate (str): speed of sampling
                 valid options are 'S','M', or 'F' for slow, medium, and fast
                 respectively (not case sensitive)
         """
         self.set_mode(mode)
-        self.set_range(range_n)
+        self.set_range(n=range_n, signal_range=signal_range)
         self.set_rate(rate)
