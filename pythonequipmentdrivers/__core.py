@@ -83,7 +83,9 @@ class Scpi_Instrument():
             pyvisa.Resource: Same resource instance as returned by
             the pyvisa ResourceManager
         """
+
         if "ASRL" in address.upper():
+            # only necessary for serial devices
             for addr, inst in self._serial_instruments:
                 if addr in address.upper():
                     print(f'matched {address} with {addr}')
@@ -95,9 +97,10 @@ class Scpi_Instrument():
             type(self)._serial_instruments.append((address_short, instrument))
             return instrument
         else:
+            # any other type of device, just open it normally
             return rm.open_resource(address)
 
-    def write(self, write_str, **kwargs):
+    def write(self, message: str, **kwargs):
         """
         write(write_str, **kwargs)
 
@@ -108,11 +111,11 @@ class Scpi_Instrument():
         need to to performed
 
         Args:
-            write_str: string, scpi query to be passed through to the device.
+            message: string, scpi query to be passed through to the device.
             **kwargs: passed to pyvisa.resource respective method
 
         """
-        return self.instrument.write(write_str, **kwargs)
+        return self.instrument.write(message, **kwargs)
 
     def read(self, **kwargs):
         """
@@ -130,7 +133,7 @@ class Scpi_Instrument():
         """
         return self.instrument.read(**kwargs)
 
-    def query(self, query_str, **kwargs):
+    def query(self, message: str, **kwargs):
         """
         query(query_str, **kwargs)
 
@@ -141,11 +144,11 @@ class Scpi_Instrument():
         need to to performed
 
         Args:
-            write_str: string, scpi query to be passed through to the device.
+            message: string, scpi query to be passed through to the device.
             **kwargs: passed to pyvisa.resource respective method
 
         """
-        return self.instrument.query(query_str, **kwargs)
+        return self.instrument.query(message, **kwargs)
 
     @property
     def idn(self):
@@ -196,24 +199,12 @@ class Scpi_Instrument():
 
     @property
     def timeout(self):
-
         return self.instrument.timeout
 
     @timeout.setter
     def timeout(self, timeout):
         self.instrument.timeout = timeout
         return None
-
-    # def __del__(self):
-    #     try:
-    #         # if connection has been estabilished terminate it
-    #         if hasattr(self, 'instrument'):
-    #             self.instrument.close()
-    #     except VisaIOError:
-    #         # if connection not connection has been estabilished (such as if an
-    #         # error is throw in __init__) do nothing
-    #         pass
-    #     return None
 
     def __repr__(self):
 
