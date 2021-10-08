@@ -197,6 +197,23 @@ class Scpi_Instrument():
 
         self.write('*RST', **kwargs)
 
+    def set_local(self):
+        """
+        set_local()
+
+        Set the instument to local mode
+
+        Attempts to send the go to local command if the device has a ren function.
+        Should be overriden to customize for a particular instument
+        """
+        try:
+            # generic set local method for GPIB, USB, TCIP
+            self.instrument.control_ren(
+                pyvisa.constants.RENLineOperation.address_gtl)
+        except AttributeError:
+            # not a device that has a ren function
+            pass
+
     @property
     def timeout(self):
         return self.instrument.timeout
@@ -385,8 +402,17 @@ class Dmms(SimpleNamespace):
         for inst in self:
             inst.rst()
 
+    def set_local(self):
+        """
+        set_local()
 
-class EnvironmentSetup():
+        Set all dmms to local mode
+        """
+        for inst in self:
+            inst.set_local()
+
+
+class EnvironmentSetup:
     """
     Class for handling the instantiation of generic sets of test equipment
     based on addressing data from file. Can blindly connect to all equipment in

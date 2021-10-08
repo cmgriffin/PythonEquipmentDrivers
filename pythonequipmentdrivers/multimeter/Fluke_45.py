@@ -125,6 +125,14 @@ class Fluke_45(Scpi_Instrument):
         """
         self.write("L2")
 
+    def set_local(self):
+        """
+        set_local()
+
+        Set the DMM to local mode
+        """
+        self.write('LOCS')
+
     def _get_range_number(self, value, reverse_lookup=False):
         mode = self.get_mode()
         rate = self.get_rate()
