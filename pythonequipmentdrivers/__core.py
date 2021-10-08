@@ -83,15 +83,19 @@ class Scpi_Instrument():
             pyvisa.Resource: Same resource instance as returned by
             the pyvisa ResourceManager
         """
-        for addr, inst in self._serial_instruments:
-            if addr in address.upper():
-                return inst
-        # if no matching address was found then we need to open it
-        instrument = rm.open_resource(address)
-        # append the short form ASRLn to the list
-        address_short = address.split("::")[0]
-        type(self)._serial_instruments.append((address_short, instrument))
-        return instrument
+        if "ASRL" in address.upper():
+            for addr, inst in self._serial_instruments:
+                if addr in address.upper():
+                    print(f'matched {address} with {addr}')
+                    return inst
+            # if no matching address was found then we need to open it
+            instrument = rm.open_resource(address)
+            # append the short form ASRLn to the list
+            address_short = address.split("::")[0]
+            type(self)._serial_instruments.append((address_short, instrument))
+            return instrument
+        else:
+            return rm.open_resource(address)
 
     def write(self, write_str, **kwargs):
         """
@@ -200,16 +204,16 @@ class Scpi_Instrument():
         self.instrument.timeout = timeout
         return None
 
-    def __del__(self):
-        try:
-            # if connection has been estabilished terminate it
-            if hasattr(self, 'instrument'):
-                self.instrument.close()
-        except VisaIOError:
-            # if connection not connection has been estabilished (such as if an
-            # error is throw in __init__) do nothing
-            pass
-        return None
+    # def __del__(self):
+    #     try:
+    #         # if connection has been estabilished terminate it
+    #         if hasattr(self, 'instrument'):
+    #             self.instrument.close()
+    #     except VisaIOError:
+    #         # if connection not connection has been estabilished (such as if an
+    #         # error is throw in __init__) do nothing
+    #         pass
+    #     return None
 
     def __repr__(self):
 
@@ -342,9 +346,9 @@ class Dmms(SimpleNamespace):
         )
 
     def __iter__(self):
-        return iter(self.__dict__.items())
+        return iter(self.__dict__.values())
 
-    def fetch_data(self, mapper=None):
+    def fetch_data(self, mapper=None, only_mapped=False):
         """
         fetch_data([mapper])
 
@@ -360,8 +364,12 @@ class Dmms(SimpleNamespace):
         """
         mapper = {} if mapper is None else mapper
         measurements = {}
-        for name, inst in self:
-            new_name = mapper.get(name, name)
+        for name, inst in self.__dict__.items():
+            new_name = mapper.get(name)
+            if new_name is None and only_mapped:
+                continue
+            elif new_name is None:
+                new_name = name
             measurements[new_name] = inst.fetch_data()
         return measurements
 
@@ -371,10 +379,10 @@ class Dmms(SimpleNamespace):
 
         Initialize (arm) the trigger of dmms where applicable.
         """
-        for _, inst in self:
+        for inst in self:
             try:
                 inst.init()
-            except TypeError:
+            except AttributeError:
                 pass
 
     def reset(self):
@@ -383,7 +391,7 @@ class Dmms(SimpleNamespace):
 
         Reset all dmms
         """
-        for _, inst in self:
+        for inst in self:
             inst.rst()
 
 
@@ -542,7 +550,8 @@ class EnvironmentSetup():
                               **kwargs)
                 vars(self)[device_name] = inst
                 if 'multimeter' in device_info['definition']:
-                    dmms[device_name] = inst
+                    short_name = device_name.replace('DMM', '')
+                    dmms[short_name] = inst
                 if verbose:
                     print(f'[CONNECTED] {device_name}')
 

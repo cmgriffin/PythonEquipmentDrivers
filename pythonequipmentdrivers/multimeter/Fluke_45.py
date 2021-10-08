@@ -144,7 +144,7 @@ class Fluke_45(Scpi_Instrument):
                         return range_
                 raise ValueError(f"{value=} is greater than highest range")
 
-    def set_range(self, max_value, n=None, auto_range=False):
+    def set_range(self, signal_range=None, n=None, auto_range=False):
         """
         set_range(n, auto_range=False)
 
@@ -164,7 +164,7 @@ class Fluke_45(Scpi_Instrument):
         if auto_range:
             self.send_raw_scpi("AUTO")
         elif n is None:
-            n = self._get_range_number(max_value)
+            n = self._get_range_number(signal_range)
         if n in range(0, 7):
             self.send_raw_scpi(f"RANGE {n}")
         else:
@@ -349,7 +349,7 @@ class Fluke_45(Scpi_Instrument):
         else:
             return self.fetch_data()
 
-    def set_trigger_source(self, source):
+    def set_trigger_source(self, trigger):
         """
         set_trigger_source(source)
 
@@ -357,7 +357,7 @@ class Fluke_45(Scpi_Instrument):
 
         source (str): { INTernal or EXTernal }
         """
-        trigger_type_num = 2 if 'ext' in source.lower() else 1
+        trigger_type_num = 2 if 'ext' in trigger.lower() else 1
         self.send_raw_scpi(f"TRIGGER {trigger_type_num}")
 
     def trigger(self):
@@ -368,7 +368,7 @@ class Fluke_45(Scpi_Instrument):
         """
         self.instrument.write('*TRG')
 
-    def config(self, mode, range_n, rate):
+    def config(self, mode, rate, signal_range=None, range_n=None):
         """
         set_mode_adv(mode, range_n, rate)
 
@@ -380,13 +380,14 @@ class Fluke_45(Scpi_Instrument):
                 which correspond to AC current, DC current, AV voltage, DC voltage,
                 resistence, frequency, and continuity respectively (not case
                 sensitive)
-            range_n (int): Set the current range setting used for measurements.
+            range_n (float, optional): Set the current range setting used for measurements.
                 valid settings are the integers 1 through 7, meaning of the index
                 depends on which measurement is being performed.
+            signal_range (float, optional): measurement range. Defaults to 'auto'
             rate (str): speed of sampling
                 valid options are 'S','M', or 'F' for slow, medium, and fast
                 respectively (not case sensitive)
         """
         self.set_mode(mode)
-        self.set_range(range_n)
+        self.set_range(n=range_n, signal_range=signal_range)
         self.set_rate(rate)
