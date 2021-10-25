@@ -24,6 +24,27 @@ class Fluke_45(Scpi_Instrument):
     http://www.ece.ubc.ca/~eng-services/files/manuals/Man_DMM_fluke45.pdf
     """
 
+    ranges = (
+        ({'VDC', 'VAC'}, (
+            ({'M', 'F'}, ((0.3, 1), (3, 2), (30, 3), (300, 4), (1000, 5))),
+            ({'S'}, ((0.1, 1), (1, 2), (10, 3), (100, 4), (1000, 5)))
+        )),
+        ({'ADC', 'AAC'}, (
+            ({'M', 'F'}, ((0.03, 1), (0.1, 2), (10, 3))),
+            ({'S'}, ((0.01, 1), (0.1, 2), (10, 3)))
+        )),
+        ({'OHM'}, (
+            ({'M', 'F'}, ((300, 1), (3E3, 2), (3E4, 3),
+             (3E5, 4), (3E6, 5), (3E7, 6), (3E8, 7))),
+            ({'S'}, ((100, 1), (1E3, 2), (1E4, 3),
+             (1E5, 4), (1E6, 5), (1E7, 6), (1E8, 7)))
+        )),
+        ({'FREQ'}, (
+            ({'S', 'M', 'F'}, ((1E3, 1), (1E4, 2), (1E5, 3),
+                               (1E6, 4), (1E7, 5))),
+        )),
+    )
+
     def __init__(self, address, **kwargs):
         super().__init__(address, **kwargs)
         self.factor = kwargs.get('factor', 1.0)
@@ -39,9 +60,9 @@ class Fluke_45(Scpi_Instrument):
             self._is_serial = False
         return None
 
-    def send_raw_scpi(self, command_str):
+    def write(self, message, **kwargs):
         """
-        send_raw_scpi(command_str)
+        write(command_str)
 
         command_str: string, scpi command to be passed through to the device.
 
@@ -53,21 +74,18 @@ class Fluke_45(Scpi_Instrument):
         A special version of this command for the Fluke45 due to issues with
         pyvisa handling it natively
         """
-        self.instrument.write(command_str)
+        super().write(message, **kwargs)
         if self._is_serial:
             # serial version returns "=>" if the command is a success
             # otherwise "?>"
             # log this with an error so the user can see if something is wrong
-            resp = self.instrument.read()
+            resp = self.read()
             if resp != "=>":
-                logger.error(f'{self} response to command was {resp}')
-            else:
-                logger.debug(f'{self} response to command was {resp}')
-        return None
+                logger.error(f' response to command was {resp}')
 
-    def query_raw_scpi(self, query_str):
+    def query(self, message, **kwargs):
         """
-        query_raw_scpi(query)
+        query(query)
 
         query_str: string, scpi query to be passed through to the device.
 
@@ -76,12 +94,12 @@ class Fluke_45(Scpi_Instrument):
         function is intended to be used for API calls for functionally that is
         not currently supported. Only to be used for queries.
         """
-        ret = self.instrument.query(query_str)
+        ret = super().query(message, **kwargs)
         if self._is_serial:
             # serial version returns "=>" if the command is a success
             # otherwise "?>"
             # log this with an error so the user can see if something is wrong
-            resp = self.instrument.read()
+            resp = self.read()
             if resp != "=>":
                 logger.error(f'{self} response to command was {resp}')
         return ret
@@ -95,19 +113,35 @@ class Fluke_45(Scpi_Instrument):
 
         returns: float
         """
-        response = self.query_raw_scpi("VAL?")
+        response = self.query("VAL?")
         return self.factor*float(response)
 
     def enable_cmd_emulation_mode(self):
         """
         enable_cmd_emulation_mode()
 
-        For use with a Fluke 8845A. Enables the Fluke 45 command set emulation 
+        For use with a Fluke 8845A. Enables the Fluke 45 command set emulation
         mode
         """
-        self.send_raw_scpi("L2")
+        self.write("L2")
 
-    def set_range(self, n, auto_range=False):
+    def _get_range_number(self, value, reverse_lookup=False):
+        mode = self.get_mode()
+        rate = self.get_rate()
+        for valid_modes, rates in self.ranges:
+            if mode not in valid_modes:
+                continue
+            for valid_rates, max_values in rates:
+                if rate not in valid_rates:
+                    continue
+                for range_, command in max_values:
+                    if value < range_ and not reverse_lookup:
+                        return command
+                    elif command == value and reverse_lookup:
+                        return range_
+                raise ValueError(f"{value=} is greater than highest range")
+
+    def set_range(self, signal_range=None, n=None, auto_range=False):
         """
         set_range(n, auto_range=False)
 
@@ -125,13 +159,13 @@ class Fluke_45(Scpi_Instrument):
         """
 
         if auto_range:
-            self.send_raw_scpi("AUTO")
+            self.write("AUTO")
+        elif n is None:
+            n = self._get_range_number(signal_range)
         if n in range(0, 7):
-            self.send_raw_scpi(f"RANGE {n}")
+            self.write(f"RANGE {n}")
         else:
             raise ValueError("Invalid range option, should be 1-7")
-
-        return None
 
     def get_range(self):
         """
@@ -144,8 +178,8 @@ class Fluke_45(Scpi_Instrument):
         returns: int
         """
 
-        response = self.query_raw_scpi("RANGE1?")
-        return int(response)
+        n = int(self.query("RANGE1?"))
+        return self._get_range_number(n, reverse_lookup=True)
 
     def set_rate(self, rate):
         """
@@ -160,7 +194,7 @@ class Fluke_45(Scpi_Instrument):
 
         rate = rate.upper()
         if rate in ['S', 'M', 'F']:
-            self.send_raw_scpi(f"RATE {rate}")
+            self.write(f"RATE {rate}")
         else:
             raise ValueError("Invalid rate option, should be 'S','M', or 'F'")
         return None
@@ -173,7 +207,7 @@ class Fluke_45(Scpi_Instrument):
         returns: str
         """
 
-        response = self.query_raw_scpi("RATE?")
+        response = self.query("RATE?")
         return response.rstrip('\r\n')
 
     def set_mode(self, mode):
@@ -191,7 +225,7 @@ class Fluke_45(Scpi_Instrument):
 
         mode = mode.upper()
         if mode in self.valid_modes:
-            self.send_raw_scpi(f"{mode}")
+            self.write(f"{mode}")
         else:
             raise ValueError("Invalid mode option, valid options are: "
                              + f"{', '.join(self.valid_modes)}")
@@ -207,7 +241,7 @@ class Fluke_45(Scpi_Instrument):
         returns: str
         """
 
-        response = self.query_raw_scpi("FUNC1?")
+        response = self.query("FUNC1?")
         return response.rstrip('\r\n')
 
     def measure_voltage(self):
@@ -321,7 +355,7 @@ class Fluke_45(Scpi_Instrument):
         source (str): { INTernal or EXTernal }
         """
         trigger_type_num = 2 if 'ext' in trigger.lower() else 1
-        self.send_raw_scpi(f"TRIGGER {trigger_type_num}")
+        self.write(f"TRIGGER {trigger_type_num}")
 
     def trigger(self):
         """
@@ -331,7 +365,7 @@ class Fluke_45(Scpi_Instrument):
         """
         self.instrument.write('*TRG')
 
-    def config(self, mode, range_n, rate):
+    def config(self, mode, rate, signal_range=None, range_n=None):
         """
         set_mode_adv(mode, range_n, rate)
 
@@ -343,13 +377,14 @@ class Fluke_45(Scpi_Instrument):
                 which correspond to AC current, DC current, AV voltage, DC voltage,
                 resistence, frequency, and continuity respectively (not case
                 sensitive)
-            range_n (int): Set the current range setting used for measurements.
+            range_n (float, optional): Set the current range setting used for measurements.
                 valid settings are the integers 1 through 7, meaning of the index
                 depends on which measurement is being performed.
+            signal_range (float, optional): measurement range. Defaults to 'auto'
             rate (str): speed of sampling
                 valid options are 'S','M', or 'F' for slow, medium, and fast
                 respectively (not case sensitive)
         """
         self.set_mode(mode)
-        self.set_range(range_n)
+        self.set_range(n=range_n, signal_range=signal_range)
         self.set_rate(rate)
