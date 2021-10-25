@@ -554,7 +554,7 @@ class Tektronix_DPO4xxx(Scpi_Instrument):
         # initiate transfer
         self.instrument.write("SAVE:IMAG:FILEF PNG")  # set filetype
         self.instrument.write("HARDCOPY START")  # start converting to image
-        self.instrument.write('*OPC?')  # done yet?
+        # self.instrument.query('*OPC?')  # done yet?
         sleep(kwargs.get('buffering_delay', 0))
 
         raw_data = self.instrument.read_raw()
