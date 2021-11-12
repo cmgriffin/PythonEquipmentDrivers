@@ -131,7 +131,12 @@ class Fluke_45(Scpi_Instrument):
 
         Set the DMM to local mode
         """
-        self.write('LOCS')
+        if self._is_serial:
+            # there is a specific serial command
+            self.write('LOCS')
+        else:
+            # use the GPIB method
+            super().set_local()
 
     def _get_range_number(self, value, reverse_lookup=False):
         mode = self.get_mode()
