@@ -210,7 +210,7 @@ class Scpi_Instrument():
             # generic set local method for GPIB, USB, TCIP
             self.instrument.control_ren(
                 pyvisa.constants.RENLineOperation.address_gtl)
-        except AttributeError:
+        except (AttributeError, VisaIOError):
             # not a device that has a ren function
             pass
 

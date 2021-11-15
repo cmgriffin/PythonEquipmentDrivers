@@ -529,4 +529,8 @@ class HP_34401A(Scpi_Instrument):
         return self.measure_time
 
     def set_local(self, **kwargs) -> None:
-        self.instrument.write("SYSTem:LOCal", **kwargs)
+        if "gpib" in self.address.lower():
+            # a GPIB deivce = use the super method
+            super().set_local()
+        else:
+            self.instrument.write("SYSTem:LOCal", **kwargs)

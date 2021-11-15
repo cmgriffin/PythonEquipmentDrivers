@@ -35,6 +35,12 @@ class Keithley_2231A(Scpi_Instrument):
 
         return None
 
+    def set_local(self):
+        if 'gpib' in self.address.lower():
+            super().set_local()
+        else:
+            set_access_remote('local')
+
     def set_channel(self, channel):  # check
         """
         set_channel(channel)
