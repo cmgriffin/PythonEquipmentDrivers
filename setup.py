@@ -22,4 +22,5 @@ setup(name='pythonequipmentdrivers',
                         'numpy',
                         'pypiwin32',
                         ],
+      scripts=['pythonequipmentdrivers/scripts/ped.py']
       )
