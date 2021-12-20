@@ -116,12 +116,13 @@ def dump_data(directory, file_name, data):
         NoneType
     """
 
-    with open(Path(directory) / f'{file_name}.csv', 'w') as f:
-        if isinstance(data[0], dict):
+    if isinstance(data[0], dict):
+        with open(Path(directory) / f'{file_name}.csv', 'w', newline='') as f:
             writer = csv.DictWriter(f, fieldnames=data[0].keys())
             writer.writeheader()
             writer.writerows(data)
-        else:
+    else:
+        with open(Path(directory) / f'{file_name}.csv', 'w') as f:
             for item in data:
                 print(*item, sep=',', file=f)
 
