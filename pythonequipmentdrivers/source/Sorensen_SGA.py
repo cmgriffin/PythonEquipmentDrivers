@@ -1,4 +1,4 @@
-from .. import Scpi_Instrument
+from pythonequipmentdrivers import Scpi_Instrument
 import numpy as np
 from time import sleep
 from typing import List, Union
@@ -75,10 +75,7 @@ class Sorensen_SGA(Scpi_Instrument):
                 (True == enabled, False == disabled), else returns None
         """
 
-        if self.get_state():
-            self.off()
-        else:
-            self.on()
+        self.set_state(self.get_state() ^ True)
 
         if return_state:
             return self.get_state()
@@ -210,7 +207,7 @@ class Sorensen_SGA(Scpi_Instrument):
 
         self.instrument.write(f'SOUR:CURR:LIM {float(current)}')
 
-    def get_over_currrent_protection(self) -> float:
+    def get_over_current_protection(self) -> float:
         """
         get_over_current_protection(current)
 
@@ -239,7 +236,7 @@ class Sorensen_SGA(Scpi_Instrument):
         """
 
         response = self.instrument.query('SYST:ERR?')
-        if response == '0':
+        if response[0] == '0':
             return None
         return response.strip()
 

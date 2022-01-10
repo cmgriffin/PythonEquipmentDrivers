@@ -1,4 +1,5 @@
-from pythonequipmentdrivers import Scpi_Instrument, VisaIOError
+from typing import Union
+from pythonequipmentdrivers import Scpi_Instrument
 from time import sleep
 import numpy as np
 
@@ -13,11 +14,10 @@ class Keithley_2231A(Scpi_Instrument):
     object for accessing basic functionallity of the Keithley DC supply
     """
 
-    def __init__(self, address, **kwargs):
+    def __init__(self, address, **kwargs) -> None:
         super().__init__(address, **kwargs)
         self.channel = kwargs.get('channel')
         self.set_access_remote('remote')
-        return None
 
     def set_access_remote(self, mode):
         """
@@ -39,7 +39,7 @@ class Keithley_2231A(Scpi_Instrument):
         if 'gpib' in self.address.lower():
             super().set_local()
         else:
-            set_access_remote('local')
+            self.set_access_remote('local')
 
     def set_channel(self, channel):  # check
         """
@@ -87,10 +87,10 @@ class Keithley_2231A(Scpi_Instrument):
 
         state: int (optional), 1 or 0 for on and off respectively
 
-        channel: int, index of the channel to control.
-                 valid options are 1-3
-
-        enables/disables the state for the power supply's output
+        Args:
+            state (bool): Supply state (True == enabled, False == disabled)
+            channel (int): Index of the channel to control. valid options
+                are 1-3
         """
         self._update_channel(channel)
         self.instrument.write(f"CHAN:OUTP {state}")
@@ -103,10 +103,12 @@ class Keithley_2231A(Scpi_Instrument):
         channel: int (optional), index of the channel to control.
                  valid options are 1-3
 
-        returns the current state of the output relay,
+        Args:
+            channel (int): index of the channel to control. Valid options
+                are 1-3
 
-        returns: int
-        1: enabled, 0: disabled
+        Returns:
+            bool: Supply state (True == enabled, False == disabled)
         """
 
         self._update_channel(channel)
@@ -122,12 +124,12 @@ class Keithley_2231A(Scpi_Instrument):
         channel: int (optional), index of the channel to control.
                  valid options are 1-3
 
-        enables the relay for the power supply's output
-        equivalent to set_state(1)
+        Args:
+            channel (int): Index of the channel to control. Valid options
+                are 1-3
         """
 
-        self.set_state(1, channel)
-        return None
+        self.set_state(True, channel)
 
     def off(self, channel=None):
         """
@@ -136,35 +138,36 @@ class Keithley_2231A(Scpi_Instrument):
         channel: int (optional), index of the channel to control.
                  valid options are 1-3
 
-        disables the relay for the power supply's output
-        equivalent to set_state(0)
+        Args:
+            channel (int): Index of the channel to control. Valid options
+                are 1-3
         """
 
-        self.set_state(0, channel)
-        return None
+        self.set_state(False, channel)
 
     def toggle(self, channel=None, return_state=False):
         """
-        toggle(return_state=False)
+        toggle(channel, return_state=False)
 
-        return_state (optional): boolean, whether or not to return the state
-        of the output relay.
+        Reverses the current state of the Supply's output
+        If return_state = True the boolean state of the supply after toggle()
+        is executed will be returned.
 
-        reverses the current state of the power supply's output relay
+        Args:
+            channel (int): Index of the channel to control. Valid options
+                are 1-3
+            return_state (bool, optional): Whether or not to return the state
+                of the supply after changing its state. Defaults to False.
 
-        if return_state = True the boolean state of the relay after toggle() is
-        executed will be returned
+        Returns:
+            Union[None, bool]: If return_state == True returns the Supply state
+                (True == enabled, False == disabled), else returns None
         """
 
-        # logic inverted so the default state is off
-        if not self.get_state(channel):
-            self.on(channel)
-        else:
-            self.off(channel)
+        self.set_state(self.get_state() ^ True, channel)
 
         if return_state:
             return self.get_state(channel)
-        return None
 
     def set_voltage(self, voltage, channel=None):
         """

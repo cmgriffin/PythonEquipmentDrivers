@@ -2,6 +2,10 @@ from .core import (get_devices_addresses, identify_devices, Scpi_Instrument,
                    VisaIOError, EnvironmentSetup,
                    initiaize_device, Gpib_Interface)
 
+from .environment_creation import build_environment
+
+from . import utility
+from . import errors
 
 from . import source
 from . import sink
@@ -10,25 +14,27 @@ from . import daq
 
 from . import powermeter
 from . import oscilloscope
-
 from . import networkanalyzer
+
 from . import functiongenerator
 
-from . import utility
-
-__all__ = ['Scpi_Instrument', 'EnvironmentSetup', 'Gpib_Interface',
-           'get_devices_addresses', 'identify_devices',
-
-           'initiaize_device',
+__all__ = ['Scpi_Instrument',
+           'get_devices_addresses',
+           'identify_devices',
            'VisaIOError',
 
-           'utility',
+           'build_environment',
+
+           'utility', 'errors',
 
            'source',
            'sink',
            'multimeter',
+           'daq',
+
            'powermeter',
            'oscilloscope',
            'networkanalyzer',
+
            'functiongenerator',
-           'daq']
+           ]
