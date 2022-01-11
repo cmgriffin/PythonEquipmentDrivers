@@ -4,6 +4,7 @@ from pyvisa import VisaIOError
 from . import errors
 from importlib import import_module
 from typing import Union, Tuple
+from types import SimpleNamespace
 
 
 def read_configuration(config_info: Union[str, Path, dict]) -> dict:
@@ -66,11 +67,85 @@ class Environment:
     Attributes of the Environment instance depend on the configuration passed
     into the build_environment
     """
-
+    # TODO: make this inheret from SimpleNamespace so we get some handy dunders
+    # (repr, eq)
+    # TODO: similar to the Dmms class add methods that act on all instruments in
+    # the collection.
     pass
 
 
+class Dmms(SimpleNamespace):
+    """
+    A slightly modified subclass of SimpleNamespace to act as a container for 
+    multimeters in the enviroment and support some common methods. 
+
+    """
+
+    def __repr__(self) -> str:
+        return (
+            super().__repr__().replace("namespace", self.__class__.__name__)
+        )
+
+    def __iter__(self):
+        return iter(self.__dict__.values())
+
+    def fetch_data(self, mapper=None, only_mapped=False):
+        """
+        fetch_data([mapper])
+
+        Fetch measurements from all DMMs and pack them into a dict. The keys 
+        will be the DMM name by default. Optionally, a mapper can be specified
+        to rename the dictonary keys.
+        Args:
+            mapper (dict, optional): rename keys of the collected data. Key
+            should be the DMM name and the value should be the desired new name.
+
+        Returns:
+            dict: dict of the fetched measurements
+        """
+        mapper = {} if mapper is None else mapper
+        measurements = {}
+        for name, inst in self.__dict__.items():
+            new_name = mapper.get(name)
+            if new_name is None and only_mapped:
+                continue
+            elif new_name is None:
+                new_name = name
+            measurements[new_name] = inst.fetch_data()
+        return measurements
+
+    def init(self):
+        """
+        init()
+
+        Initialize (arm) the trigger of dmms where applicable.
+        """
+        for inst in self:
+            try:
+                inst.init()
+            except AttributeError:
+                pass
+
+    def reset(self):
+        """
+        reset()
+
+        Reset all dmms
+        """
+        for inst in self:
+            inst.rst()
+
+    def set_local(self):
+        """
+        set_local()
+
+        Set all dmms to local mode
+        """
+        for inst in self:
+            inst.set_local()
 # Update expected/assumed format of json file
+
+
 def build_environment(configuration: Union[str, Path, dict],
                       **kwargs) -> Environment:
     """
@@ -194,11 +269,13 @@ def build_environment(configuration: Union[str, Path, dict],
 
     # build Environment instance
     env = Environment()
+    dmms = {}
     for name, meta_info in env_config.items():
 
         try:
             # get object to instantate from it's source module
-            Module = import_module(meta_info.pop('definition'))
+            inst_definition = meta_info.pop('definition')
+            Module = import_module(inst_definition)
             Resource = getattr(Module, meta_info.pop('object'))
 
             # special keyword for resource initialization, not passed as kwarg
@@ -206,7 +283,11 @@ def build_environment(configuration: Union[str, Path, dict],
 
             # create instance of Resource called 'name', any remaining items in
             # meta_info will be passed as kwargs
-            setattr(env, name, Resource(**meta_info))
+            inst = Resource(**meta_info)
+            setattr(env, name, inst)
+
+            if 'multimeter' in inst_definition:
+                dmms[name.replace('DMM', '')] = inst
 
             if kwargs.get('verbose', True):
                 print(f'[CONNECTED] {name}')
@@ -235,6 +316,8 @@ def build_environment(configuration: Union[str, Path, dict],
             if object_mask:  # unknown resource is required equipment
                 raise errors.UnsupportedResourceError(error)
 
+    if dmms:
+        env.dmms = Dmms(**dmms)
     return env
 
 
