@@ -1,10 +1,12 @@
-from pathlib import Path
 import json
-from pyvisa import VisaIOError
-from . import errors
 from importlib import import_module
-from typing import Union, Tuple
+from pathlib import Path
 from types import SimpleNamespace
+from typing import Iterator, Tuple, Union
+
+from pyvisa import VisaIOError
+
+from . import errors
 
 
 def read_configuration(config_info: Union[str, Path, dict]) -> dict:
@@ -58,7 +60,7 @@ def mask_resources(configuration: dict, resource_mask: set) -> dict:
     return configuration
 
 
-class Environment:
+class Environment(SimpleNamespace):
     """
     Environment
 
@@ -67,29 +69,42 @@ class Environment:
     Attributes of the Environment instance depend on the configuration passed
     into the build_environment
     """
-    # TODO: make this inheret from SimpleNamespace so we get some handy dunders
-    # (repr, eq)
-    # TODO: similar to the Dmms class add methods that act on all instruments in
-    # the collection.
-    pass
-
-
-class Dmms(SimpleNamespace):
-    """
-    A slightly modified subclass of SimpleNamespace to act as a container for 
-    multimeters in the enviroment and support some common methods. 
-
-    """
 
     def __repr__(self) -> str:
         return (
             super().__repr__().replace("namespace", self.__class__.__name__)
         )
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator:
         return iter(self.__dict__.values())
 
-    def fetch_data(self, mapper=None, only_mapped=False):
+    def reset(self) -> None:
+        """
+        reset()
+
+        Reset all dmms
+        """
+        for inst in self:
+            inst.rst()
+
+    def set_local(self) -> None:
+        """
+        set_local()
+
+        Set all dmms to local mode
+        """
+        for inst in self:
+            inst.set_local()
+
+
+class Dmms(Environment):
+    """
+    A slightly modified subclass of Environment to act as a container for 
+    multimeters and support some common methods. 
+
+    """
+
+    def fetch_data(self, mapper=None, only_mapped=False) -> dict[str, float]:
         """
         fetch_data([mapper])
 
@@ -114,7 +129,7 @@ class Dmms(SimpleNamespace):
             measurements[new_name] = inst.fetch_data()
         return measurements
 
-    def init(self):
+    def init(self) -> None:
         """
         init()
 
@@ -126,23 +141,7 @@ class Dmms(SimpleNamespace):
             except AttributeError:
                 pass
 
-    def reset(self):
-        """
-        reset()
 
-        Reset all dmms
-        """
-        for inst in self:
-            inst.rst()
-
-    def set_local(self):
-        """
-        set_local()
-
-        Set all dmms to local mode
-        """
-        for inst in self:
-            inst.set_local()
 # Update expected/assumed format of json file
 
 
