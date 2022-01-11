@@ -1,4 +1,5 @@
-from .core import (get_devices_addresses, identify_devices, Gpib_Interface)
+from .core import (Scpi_Instrument, get_devices_addresses,
+                   identify_devices, Gpib_Interface, VisaIOError)
 
 from .environment_creation import build_environment
 

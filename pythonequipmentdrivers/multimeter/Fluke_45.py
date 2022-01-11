@@ -1,7 +1,6 @@
 import logging
 from pyvisa.constants import BufferOperation
 from pythonequipmentdrivers import Scpi_Instrument
-from pythonequipmentdrivers import VisaIOError
 
 logger = logging.getLogger(__name__)
 
