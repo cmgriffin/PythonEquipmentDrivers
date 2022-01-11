@@ -1,6 +1,4 @@
-from .core import (get_devices_addresses, identify_devices, Scpi_Instrument,
-                   VisaIOError, EnvironmentSetup,
-                   initiaize_device, Gpib_Interface)
+from .core import (get_devices_addresses, identify_devices, Gpib_Interface)
 
 from .environment_creation import build_environment
 
@@ -21,7 +19,7 @@ from . import functiongenerator
 __all__ = ['Scpi_Instrument',
            'get_devices_addresses',
            'identify_devices',
-           'VisaIOError',
+           'Gpib_Interface'
 
            'build_environment',
 
