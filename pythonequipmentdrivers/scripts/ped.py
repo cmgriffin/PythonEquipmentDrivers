@@ -40,7 +40,7 @@ def run_cli():
     if not config_path.is_file():
         raise FileNotFoundError(
             f'{config_path} file not found \n run "ped --setup" to configure')
-    temp = ped.EnvironmentSetup(config_path)
+    temp = ped.build_environment(config_path)
     vars().update(vars(temp))  # transfer
     banner = '\n\nPythonEquiptmentDrivers CLI\n' + globals()['__doc__']
     try:
