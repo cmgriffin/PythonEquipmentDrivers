@@ -85,7 +85,10 @@ class Environment(SimpleNamespace):
         Reset all dmms
         """
         for inst in self:
-            inst.rst()
+            try:
+                inst.rst()
+            except (VisaIOError, AttributeError):
+                pass
 
     def set_local(self) -> None:
         """
@@ -94,7 +97,10 @@ class Environment(SimpleNamespace):
         Set all dmms to local mode
         """
         for inst in self:
-            inst.set_local()
+            try:
+                inst.set_local()
+            except (VisaIOError, AttributeError):
+                pass
 
 
 class Dmms(Environment):
@@ -138,7 +144,7 @@ class Dmms(Environment):
         for inst in self:
             try:
                 inst.init()
-            except AttributeError:
+            except (VisaIOError, AttributeError):
                 pass
 
 
