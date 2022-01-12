@@ -378,3 +378,16 @@ def initiaize_device(instance, sequence) -> None:
                 print(error_msg_template.format(method_name, error))
         else:
             print(error_msg_template.format(method_name, '"unknown method"'))
+
+
+def EnvironmentSetup(*args, **kwargs) -> Environment:
+    """
+    Preserve compatability for existing scripts.
+    See build_enviroment for full docs
+    """
+    import warnings
+    warnings.simplefilter('default')
+    warnings.warn(
+        "EnvironmentSetup class is deprecated, use build_enviroment instead",
+        DeprecationWarning)
+    return build_environment(*args, **kwargs)

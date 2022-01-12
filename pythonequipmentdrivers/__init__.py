@@ -1,7 +1,7 @@
 from .core import (Scpi_Instrument, get_devices_addresses,
                    identify_devices, Gpib_Interface, VisaIOError)
 
-from .environment_creation import build_environment
+from .environment_creation import build_environment, EnvironmentSetup
 
 from . import utility
 from . import errors
@@ -22,7 +22,7 @@ __all__ = ['Scpi_Instrument',
            'identify_devices',
            'Gpib_Interface'
 
-           'build_environment',
+           'build_environment', 'EnvironmentSetup'
 
            'utility', 'errors',
 
