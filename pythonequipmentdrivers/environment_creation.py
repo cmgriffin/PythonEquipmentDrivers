@@ -147,6 +147,18 @@ class Dmms(Environment):
             except (VisaIOError, AttributeError):
                 pass
 
+    def trigger(self) -> None:
+        """
+        trigger()
+
+        Perform a basic sequential triggering of all devices.
+        """
+        for inst in self:
+            try:
+                inst.trigger()
+            except (VisaIOError, AttributeError):
+                pass
+
 
 # Update expected/assumed format of json file
 
