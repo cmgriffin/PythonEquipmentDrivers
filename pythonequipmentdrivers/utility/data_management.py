@@ -3,6 +3,9 @@ from time import strftime
 import json
 from collections.abc import Mapping, Sequence, Iterable
 import csv
+import tkinter as tk
+from tkinter import filedialog
+from tkinter.filedialog import askdirectory
 
 
 def log_data(file_path: Path, *data, init=False):
@@ -43,7 +46,7 @@ def log_data(file_path: Path, *data, init=False):
     stored in a single cell of the csv file.
 
     Args:
-        file_name (str, or path-like object): path of the log file to use, does
+        file_nam e (str, or path-like object): path of the log file to use, does
             not need to include the file extension or previously exist.
         data: a sequence or unpacked iterable of data to be stored.
 
@@ -265,6 +268,26 @@ def validate_data(datum: Mapping[str, float], validation_checks: Iterable[Sequen
             elif (error_ratio_lim is None) and (error > error_lim):
                 print(f"{meas_name} error is above {error_lim} ({meas=})")
     return True
+
+
+class DataLog:
+    """
+    Object for handling logging of test data and keeping track of the log state
+
+    Goal is to contain all relevant functions in a single object
+
+    Having an object to track the state also enables optional removal of the
+    log directory if no data has been written.
+    """
+
+    def __init__(self, base_dir=None, images=False, raw_data=False, **test_info):
+        if not base_dir:
+            base_dir = askdirectory(title='Select a directory for data log')
+        self.test_dir = create_test_log(
+            base_dir, images, raw_data, **test_info)
+
+    def _check_if_empty(self):
+        ignore_names = ['images', 'raw_data', ]
 
 
 if __name__ == '__main__':
