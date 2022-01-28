@@ -6,6 +6,9 @@ import csv
 import tkinter as tk
 from tkinter import filedialog
 from tkinter.filedialog import askdirectory
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def log_data(file_path: Path, *data, init=False):
@@ -184,30 +187,9 @@ def create_test_log(base_dir, images=False, raw_data=False, **test_info):
     Returns:
         Path-like object: The path to the newly created directory structure.
     """
+    dlog = DataLog(base_dir, images=False, raw_data=False, **test_info)
 
-    test_name = test_info.get('test_name', 'test_data')
-    file_t_stamp = strftime(r"%Y%m%d%H%M%S")
-    test_info['run_time'] = strftime(r"%Y/%m/%d %H:%M:%S")
-
-    # make base directory for test log
-    test_dir = Path(base_dir) / f'{test_name}_{file_t_stamp}'
-    test_dir.mkdir(exist_ok=False)  # arg prevents accidently overwriting
-
-    # optional sub-directories for images or raw data files
-    if images:
-        (test_dir / 'images').mkdir()
-    if raw_data:
-        (test_dir / 'raw_data').mkdir()
-
-    # dump config dictionary to file if kwargs were passed
-    if test_info:
-        with open(test_dir / f'log_{file_t_stamp}.txt', 'w') as f:
-            json.dump(test_info, f, indent=4,
-                      check_circular=True,
-                      allow_nan=True,
-                      sort_keys=False)
-
-    return test_dir  # return newly created directory
+    return dlog.test_dir  # return newly created directory
 
 
 def validate_data(datum: Mapping[str, float], validation_checks: Iterable[Sequence]):
@@ -279,15 +261,130 @@ class DataLog:
     Having an object to track the state also enables optional removal of the
     log directory if no data has been written.
     """
+    instances = []
 
-    def __init__(self, base_dir=None, images=False, raw_data=False, **test_info):
+    def __init__(self, base_dir=None, images=False, raw_data=False, delete_if_empty=True, **test_info):
         if not base_dir:
             base_dir = askdirectory(title='Select a directory for data log')
-        self.test_dir = create_test_log(
+        self.test_dir = self.create_test_log(
             base_dir, images, raw_data, **test_info)
+        self.delete_if_empty = delete_if_empty
 
-    def _check_if_empty(self):
-        ignore_names = ['images', 'raw_data', ]
+        # take a snapshot of the initial files for later comparison
+        # these will be ignored when checking to see if the directory has been
+        # used
+        self.starting_files = self.get_files()
+        logger.debug(f"{self.starting_files =}")
+
+        # need to hold onto instance so it doesn't get garbage collected
+        type(self).instances.append(self)
+
+    def get_files(self) -> set[str]:
+        return {f for f in self.test_dir.rglob('*')}
+
+    def _delete_folder(self) -> None:
+        logger.debug('delete method called')
+        for sub in self.test_dir.iterdir():
+            if sub.is_dir():
+                self._delete_folder(sub)
+            else:
+                sub.unlink()
+        self.test_dir.rmdir()
+
+    def __del__(self):
+        is_empty = self.starting_files == self.get_files()
+        if is_empty and self.delete_if_empty:
+            self._delete_folder()
+
+    def create_test_log(self, base_dir, images=False, raw_data=False, **test_info):
+        """
+        create_test_log(base_dir, images=False, raw_data=False, **test_info)
+
+        Creates a directory structure to be used for storing test data or
+        measurements.
+
+        The directory structure is created in the root directory
+        specified by the arguement "base_dir". By default the name of the resulting
+        directory will be "test_data_TIMESTAMP" where TIMESTAMP is record of when
+        the directory was created in the format YYYYMMDDHHmmSS. To change the name
+        of the directory structure pass an alternate name using the arguement
+        "test_name". The timestamp is not optional and will always be added, this
+        is included to prevent the accidently overwrite of data.
+
+        Two additional sub-directories can be created within the directory
+        structure by setting their boolean arguements "images" and "raw_data" to
+        True. These arguements will create sub-folders with the same names within
+        the directory structure. These directories are intended for storing images
+        and raw data files respectively, in a more orgainized manner than in a flat
+        directory.
+
+        If any keyword arguements are passed they will be logged in a json file
+        within the directory structure called "log_TIMESTAMP.json" This is intened
+        to hold the configuration settings or any notes for a test or experiment
+        that is to be run. In addition to any keyword arguements passed an addition
+        key-value pair, ('run_time': TIMESTAMP) will be added to the json.
+
+        Example:
+
+        # The following code ...
+
+            test_info = {'test_name': 'Transient_Measurements',
+                        'v_in_setpoints': [40, 54, 60],
+                        'i_out_setpoints': [100, 200, 300],
+                        'measurement_delay': 2.0,
+                        'dut': "SN0123456789"}
+            create_test_log("example_dir", images=True, **test_info)
+
+        # ... produces the directory structure below:
+
+            example_dir |
+                        |
+                        ___ Transients_20210521095931 |
+                                                    |
+                                                    __ images
+                                                    |
+                                                    |
+                                                    __ log_20210521095931.json
+
+        Args:
+            base_dir (str or Path-like object): root directory in which to create
+                the directory structure.
+            images (bool, optional): Whether or not to create a sub-directory
+                called "images". Defaults to False.
+            raw_data (bool, optional): Whether or not to create a sub-directory
+                called "raw_data". Defaults to False.
+        Kwargs:
+            test_info: configuration information for a test or experiment. Can
+                include an alternate name for the directory structure with the key
+                "test_name". Will be logged to a json file
+
+        Returns:
+            Path-like object: The path to the newly created directory structure.
+        """
+
+        test_name = test_info.get('test_name', 'test_data')
+        file_t_stamp = strftime(r"%Y%m%d%H%M%S")
+        test_info['run_time'] = strftime(r"%Y/%m/%d %H:%M:%S")
+
+        # make base directory for test log
+        test_dir = Path(base_dir) / f'{test_name}_{file_t_stamp}'
+        test_dir.mkdir(exist_ok=False)  # arg prevents accidently overwriting
+
+        # optional sub-directories for images or raw data files
+        if images:
+            (test_dir / 'images').mkdir()
+        if raw_data:
+            (test_dir / 'raw_data').mkdir()
+
+        # dump config dictionary to file if kwargs were passed
+        if test_info:
+            with open(test_dir / f'log_{file_t_stamp}.txt', 'w') as f:
+                json.dump(test_info, f, indent=4,
+                          check_circular=True,
+                          allow_nan=True,
+                          sort_keys=False)
+
+        return test_dir  # return newly created directory
 
 
 if __name__ == '__main__':
