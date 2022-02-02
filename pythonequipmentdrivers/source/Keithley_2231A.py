@@ -129,7 +129,7 @@ class Keithley_2231A(Scpi_Instrument):
                 are 1-3
         """
 
-        self.set_state(True, channel)
+        self.set_state(1, channel)
 
     def off(self, channel=None):
         """
@@ -143,7 +143,7 @@ class Keithley_2231A(Scpi_Instrument):
                 are 1-3
         """
 
-        self.set_state(False, channel)
+        self.set_state(0, channel)
 
     def toggle(self, channel=None, return_state=False):
         """
