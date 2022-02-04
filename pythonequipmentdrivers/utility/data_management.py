@@ -2,6 +2,7 @@ from pathlib import Path
 from time import strftime
 import json
 from collections.abc import Mapping, Sequence, Iterable
+from typing import Union
 import csv
 import tkinter as tk
 from tkinter import filedialog
@@ -208,14 +209,14 @@ def validate_data(datum: Mapping[str, float], validation_checks: Iterable[Sequen
 
     Vout checked relative to vout_set that error ratio (error/expected) does
     not exceed 0.15.
-    Iout checked relative to iout_set that error does not exceed 10 and that 
+    Iout checked relative to iout_set that error does not exceed 10 and that
     error ratio does not excced 0.05
     Pvout checked that absolute value does not exceed 63.0
 
     Args:
         datum (Mapping[str, float]): a dict of labeled measurement values
         validation_checks (Iterable[Sequence]): An interable of lists
-        describing the check to perform. 
+        describing the check to perform.
         fields: (meas_name, expected_name, error_lim, error_ratio_lim)
             expected name: if None then check will be absolute
             error_lim: if None then error check is skipped
@@ -276,13 +277,20 @@ class DataLog:
         self.starting_files = self.get_files()
         logger.debug(f"{self.starting_files =}")
 
-        # need to hold onto instance so it doesn't get garbage collected
+        # need to hold onto instance reference so it doesn't get garbage collected
         type(self).instances.append(self)
 
     def get_files(self) -> set[str]:
+        """
+        return a set of all files (recursive) in the test directory
+
+        """
         return {f for f in self.test_dir.rglob('*')}
 
     def _delete_folder(self) -> None:
+        """
+        recursively delete files in the test_dir then remove the test_dir folder
+        """
         logger.debug('delete method called')
         for sub in self.test_dir.iterdir():
             if sub.is_dir():
@@ -385,6 +393,97 @@ class DataLog:
                           sort_keys=False)
 
         return test_dir  # return newly created directory
+
+    def dump_data(self, file_name: str, data: Iterable[Union[Sequence, Mapping]]) -> None:
+        """
+    dump_data(directory, file_name, data)
+
+    Writes an iterable of iterables, such as a list of lists, row by row to a
+    csv file. Useful for logging a large chunk of data at once after test or
+    measurement.
+
+    The arguements "directory" and "file_name" specify the path of the file to
+    be created. The log file will be storted at directory/file_name.csv,
+    file_name itself does not need to contain the file extension, it will
+    automatically be added.
+
+    The iterable "data" can contain an arbitrary number of elements which in
+    turn can have arbitrary length and data type as long as it can be safely
+    cast to a string. For example:
+
+    data = [["column A", "column B", "column C"], [1, 2, 3], [4, 5, 6]]
+    dump_data("some_directory", "my_data", data)
+
+    Each element of data does not need to have the same length but it is
+    recommended to make parsing the data after the fact easier.
+
+    Args:
+        file_name (str): name of the log file to use, does not need to include
+            the file extension.
+        data: an iterable of iterables of data to be stored.
+
+    Returns:
+        NoneType
+    """
+        dump_data(self.test_dir, file_name, data)
+
+    def log_data(self, file_name, *data, init=False):
+        """
+        log_data(file_name, *data, init=False)
+
+        Writes an iterable to a row of a csv file. Useful for logging data row by
+        row while a test or measurement is in progress.
+
+        If init=True a new file is created (or overwriten if the file already
+        exists) and the iterable "data" is unpacked into the first row of the new
+        document. If init = False then the existing file is opened and the iterable
+        "data" is unpacked and appended to the end of the document. If init = False
+        but the file does not already exist it will be created.
+
+        The arguement "file_path" specifies the path of the file to be
+        created/updated. The log file will be storted at file_path.csv
+        , file_path itself does not need to contain the file extension, it will
+        automatically be added.
+
+        The iterable "data" can contain an arbitrary number of elements and each
+        element can use an arbitrary data type as long as it can be safely cast to
+        a string. The argument "data" should be passed as an unpacked structure,
+        not as an iterable. For example:
+
+            Correct:
+                log_data("my_data", 1, 2, 3, 4, 5)
+                log_data("my_data", *list_of_data)
+                log_data("my_data", *['a', 'b', 'c', 4, 5, 6])
+                log_data("my_data", *(1, 2, 3, 4, 5))
+                log_data("my_data", 'column 1', 'column 2', init=True)
+
+            Incorrect:
+                log_data("my_data", [1, 2, 3, 4, 5])
+                log_data("my_data", ('a', 'b', 'c', 'd'))
+
+        In the case of the incorrect examples the entire iterable "data" would be
+        stored in a single cell of the csv file.
+
+        Args:
+            file_name (str, or path-like object): path of the log file to use, does
+                not need to include the file extension or previously exist.
+            data: a sequence or unpacked iterable of data to be stored.
+
+        Kwargs:
+            init (bool, optional): Whether or not to open the log file in write
+                mode ("True", for creating a new file) or append mode ("False" for
+                adding additional data). Defaults to False.
+        Example:
+            cwd = Path().parent.resolve()
+            file = cwd.joinpath('my_data')
+            mydata = [3, 4, 5]
+            moredata = {6, 7, 8}
+            log_data(file, "column A", "column B", "column C", init=True)
+            log_data(file, 1, 2, 3)
+            log_data(file, *mydata)  # note use of generator
+            log_data(file, *moredata)  # note use of generator
+        """
+        log_data(self.test_dir / file_name, *data,  init)
 
 
 if __name__ == '__main__':
