@@ -300,6 +300,10 @@ def build_environment(configuration: Union[str, Path, dict],
 
             # create instance of Resource called 'name', any remaining items in
             # meta_info will be passed as kwargs
+            if 'kwargs' in meta_info:
+                # old format with specific kwargs key
+                # flatten it out
+                meta_info.update(meta_info.pop("kwargs", {}))
             inst = Resource(**meta_info)
             setattr(env, name, inst)
 
@@ -309,7 +313,7 @@ def build_environment(configuration: Union[str, Path, dict],
             if kwargs.get('verbose', True):
                 print(f'[CONNECTED] {name}')
 
-            if kwargs.get('init', False) and (init_sequence):
+            if (kwargs.get('init', False) or kwargs.get('init_devices', False)) and (init_sequence):
                 # get the instance in question
                 resource_instance = getattr(env, name)
 
