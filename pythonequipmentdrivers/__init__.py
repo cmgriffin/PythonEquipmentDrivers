@@ -16,6 +16,7 @@ from . import oscilloscope
 from . import networkanalyzer
 
 from . import functiongenerator
+from . import temperaturecontroller
 
 __all__ = ['Scpi_Instrument',
            'get_devices_addresses',
@@ -36,4 +37,5 @@ __all__ = ['Scpi_Instrument',
            'networkanalyzer',
 
            'functiongenerator',
+           'temperaturecontroller'
            ]
