@@ -33,7 +33,7 @@ def wait_unit(meas_func: Callable[[], float], limit: float, limit_type: str):
         end="",
     )
     while waiting:
-        print(" .", end="")
+        print(" .", end="", flush=True)
         if check_value(meas):
             waiting = False
             print("\n")
