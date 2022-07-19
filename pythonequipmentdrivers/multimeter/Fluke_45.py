@@ -48,7 +48,7 @@ class Fluke_45(Scpi_Instrument):
         super().__init__(address, **kwargs)
         self.factor = kwargs.get('factor', 1.0)
         self.valid_modes = ('AAC', 'ADC', 'VAC', 'VDC',
-                            'OHMS', 'FREQ', 'CONT')
+                            'OHMS', 'FREQ', 'CONT', 'DIODE')
         # if fluke 45 is using rs232 special considerations need to be taken
         if "asrl" in address.lower():
             self._is_serial = True
