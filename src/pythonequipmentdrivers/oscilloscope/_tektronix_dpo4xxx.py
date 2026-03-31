@@ -595,6 +595,23 @@ class Tektronix_DPO4xxx(VisaResource):
         if len(data) == 1:
             return data[0]
         return tuple(data)
+    
+    def get_all_measure_data(self) -> dict[str, float]:
+        meas_data = {}
+        for meas_idx in range(1, 8+1):
+            if self.query_resource(f'MEASU:MEAS{meas_idx}:STATE?') == "0":
+                continue
+            # 
+            # 'FORWARDS;RISE;RISE;FREQUENCY;"Hz";CH1;CH3;1'
+            meas_params = self.query_resource(f'MEASU:MEAS{meas_idx}?').split(";")
+            meas_type, meas_units, source_ch = meas_params[3:6]
+            meas_units = meas_units.replace("\"", "")
+            meas_val = float(self.query_resource(f'MEASU:MEAS{meas_idx}:VAL?'))
+            meas_data[f"{source_ch}_{meas_type}_{meas_units}"] = meas_val
+        return meas_data
+
+
+
 
     def configure_measurement(
         self,
